@@ -100,11 +100,10 @@ def transcode(tmp_dir):
         dir = dir.relative_to(cwd)
         os.makedirs(tmp_dir / dir, exist_ok=True)
 
-    fun = partial(transcode_file, output_dir = tmp_dir)
     with Pool() as pool:
         handler = partial(error_handler, pool)
         for file in files:
-            pool.apply_async(fun, args=(file, ), error_callback = handler)
+            pool.apply_async(transcode_file, args=(file, tmp_dir, ), error_callback = handler)
         pool.close()
         pool.join()
 
