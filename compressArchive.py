@@ -38,8 +38,9 @@ def check_transcoding(tmp_dir):
 
 
 def compress_cbz(input_file, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
+    base = Path.cwd()
     output_dir_absolute = output_dir.resolve()
+    os.makedirs(output_dir_absolute / input_file.parent, exist_ok=True)
 
     with (
             tempfile.TemporaryDirectory() as original_tmp,
@@ -51,13 +52,14 @@ def compress_cbz(input_file, output_dir):
         clean_tmp_dir(original_tmp)
         check_file_types(original_tmp)
 
-        base = Path.cwd()
         os.chdir(original_tmp)
         transcode(processed_tmp)
 
         # shouldn't be necessary because the program checks the exit status
         check_transcoding(processed_tmp) 
         pack(input_file, output_dir_absolute, processed_tmp)
+
+    os.chdir(base)
 
 
 def transcode_file(input_file, output_dir):
@@ -70,7 +72,7 @@ def transcode_file(input_file, output_dir):
         '-d',
         '0',
         '-e',
-        '1',
+        '9',
         '-E',
         '3',
         '--num_threads',
