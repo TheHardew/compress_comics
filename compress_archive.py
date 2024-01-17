@@ -15,9 +15,6 @@ import magic
 
 def unpack(f, tmp_dir):
     mime_type = magic.from_file(f, mime=True)
-    print(mime_type)
-    input()
-    mime_type = subprocess.run(["file", "--mime-type", "-b", str(f)], capture_output=True, text=True).stdout.strip()
 
     if mime_type == "application/zip":
         subprocess.run(["unzip", "-oO", "GB18030", str(f), "-d", str(tmp_dir)])
@@ -170,9 +167,6 @@ def main():
         if (comic.is_file() and 
             comic.suffix in ['.cbz', '.cbr'] and not
             str(comic).startswith(args.output_directory)):
-            
-            print(comic)
-            input()
             compress_cbz(comic, args)
 
 if __name__ == "__main__":
