@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os
-import shutil
+from shutil import copy
 import subprocess
 from pathlib import Path
 from multiprocessing import Pool
@@ -88,7 +88,7 @@ def copy_files(original_dir, processed_dir):
     extensions = ['.txt', '.xml', '.jxl']
     files = [file.relative_to(original_dir) for file in original_dir.glob('**/*') if file.suffix.lower() in extensions and file.is_file()]
     for file in files:
-        shutil.copy(file, processed_dir)
+        copy(file, processed_dir)
 
 
 def transcode_file(input_file, tmp_dir, args):
@@ -137,12 +137,6 @@ def transcode(tmp_dir, args):
             pool.apply_async(transcode_file, args=(file, tmp_dir, args, ), error_callback = handler)
         pool.close()
         pool.join()
-
-
-    for file in cwd.glob('**/*'):
-        if file.suffix.lower() in ['.txt', '.xml']:
-            file = file.relative_to(cwd)
-            shutil.copy(file, tmp_dir / file)
 
 
 def pack(input_file, output_dir, processed_tmp):
