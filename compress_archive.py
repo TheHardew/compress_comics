@@ -10,9 +10,13 @@ from tempfile import TemporaryDirectory
 import sys
 import zipfile
 from argparse import ArgumentParser
+import magic
 
 
 def unpack(f, tmp_dir):
+    mime_type = magic.from_file(f, mime=True)
+    print(mime_type)
+    input()
     mime_type = subprocess.run(["file", "--mime-type", "-b", str(f)], capture_output=True, text=True).stdout.strip()
 
     if mime_type == "application/zip":
@@ -31,7 +35,7 @@ def clean_tmp_dir(tmp_dir):
 def check_file_types(tmp_dir):
     extensions = ['.gif', '.jpg', '.jpeg', '.png', '.jxl', '.xml', '.txt']
     if any(file.suffix.lower() not in extensions for file in tmp_dir.glob('**/*') if file.is_file()):
-        raise Exception(f'{file} is not jpg/png/jxl/xml/txt')
+        raise Exception(f'{file} is not git/jpg/png/jxl/xml/txt')
 
 def check_transcoding(tmp_dir):
     source_files = len([file for file in Path.cwd().glob('**/*') if file.is_file()])
