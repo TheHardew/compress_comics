@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from multiprocessing import Pool
 from functools import partial
-import tempfile
+from tempfile import TemporaryDirectory
 import sys
 import zipfile
-import argparse
+from argparse import ArgumentParser
 
 
 def unpack(f, tmp_dir):
@@ -41,11 +42,13 @@ def check_transcoding(tmp_dir):
 
 def handle_flags(args):
     name = args[0]
-    parser = argparse.ArgumentParser()
+    parser = ArgumentParser()
+    # TODO handle any flags
     parser.add_argument('-e', '--effort',  type=int, help=f'Encoder effort setting. Range: 1 .. 9. Default 9.', default=9)
-    parser.add_argument('-E', '--modular_nb_prev_channels',  type=int, help=f'usage: {name}. Default 3.', default=3)
-    parser.add_argument('--brotli_effort',  type=int, help=f'usage: {name}. Default 11.', default=11)
-    parser.add_argument('-d' '--distance',  help=f'usage: {name}. Default 0.', default=0)
+    parser.add_argument('-E', '--modular_nb_prev_channels',  type=int, help=f'usage: {name}. [modular encoding] number of extra MA tree properties to use. Default 3.', default=3)
+    parser.add_argument('--brotli_effort',  type=int, help=f'usage: {name}. Brotli effort setting. Range: 0 .. 11. Default 11.', default=11)
+    parser.add_argument('-d' '--distance',  help=f'usage: {name}. Max. butteraugli distance, lower = higher quality. Default 0.', default=0)
+    parser.add_argument('-j' '--lossless_jpeg',  help=f'usage: {name}. If the input is JPEG, losslessly transcode JPEG, rather than using reencode pixels. Default 0.', default=1)
     parser.add_argument('output_directory', type=str, help='Output drectory')
     args = parser.parse_args()
 
@@ -61,8 +64,8 @@ def compress_cbz(input_file, args):
     os.makedirs(output_dir_absolute / input_file.parent, exist_ok=True)
 
     with (
-            tempfile.TemporaryDirectory() as original_tmp,
-            tempfile.TemporaryDirectory() as processed_tmp
+            TemporaryDirectory() as original_tmp,
+            TemporaryDirectory() as processed_tmp
     ):
         original_tmp = Path(original_tmp)
         processed_tmp = Path(processed_tmp)
@@ -72,12 +75,20 @@ def compress_cbz(input_file, args):
 
         os.chdir(original_tmp)
         transcode(processed_tmp, args)
+        copy_files(original_tmp, processed_tmp)
 
         # shouldn't be necessary because the program checks the exit status
         check_transcoding(processed_tmp) 
         pack(input_file, output_dir_absolute, processed_tmp)
 
     os.chdir(base)
+
+
+def copy_files(original_dir, processed_dir):
+    extensions = ['.txt', '.xml', '.jxl']
+    files = [file.relative_to(original_dir) for file in original_dir.glob('**/*') if file.suffix.lower() in extensions and file.is_file()]
+    for file in files:
+        shutil.copy(file, processed_dir)
 
 
 def transcode_file(input_file, tmp_dir, args):
@@ -95,6 +106,8 @@ def transcode_file(input_file, tmp_dir, args):
         str(args.modular_nb_prev_channels),
         '--num_threads',
         '0',
+        '-j',
+        str(args.j__lossless_jpeg),
         input_file,
         str(output_file),
         ])
