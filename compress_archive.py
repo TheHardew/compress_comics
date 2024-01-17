@@ -8,6 +8,8 @@ from functools import partial
 import tempfile
 import sys
 import zipfile
+import argparse
+
 
 def unpack(f, tmp_dir):
     mime_type = subprocess.run(["file", "--mime-type", "-b", str(f)], capture_output=True, text=True).stdout.strip()
@@ -37,9 +39,25 @@ def check_transcoding(tmp_dir):
         raise Exception('not all files transcoded - exiting')
 
 
-def compress_cbz(input_file, output_dir):
+def handle_flags(args):
+    name = args[0]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-e', '--effort',  type=int, help=f'Encoder effort setting. Range: 1 .. 9. Default 9.', default=9)
+    parser.add_argument('-E', '--modular_nb_prev_channels',  type=int, help=f'usage: {name}. Default 3.', default=3)
+    parser.add_argument('--brotli_effort',  type=int, help=f'usage: {name}. Default 11.', default=11)
+    parser.add_argument('-d' '--distance',  help=f'usage: {name}. Default 0.', default=0)
+    parser.add_argument('output_directory', type=str, help='Output drectory')
+    args = parser.parse_args()
+
+    if 'help' in args:
+        parser.print_help()
+        exit()
+    return args
+
+
+def compress_cbz(input_file, args):
     base = Path.cwd()
-    output_dir_absolute = output_dir.resolve()
+    output_dir_absolute = Path(args.output_directory).resolve()
     os.makedirs(output_dir_absolute / input_file.parent, exist_ok=True)
 
     with (
@@ -53,7 +71,7 @@ def compress_cbz(input_file, output_dir):
         check_file_types(original_tmp)
 
         os.chdir(original_tmp)
-        transcode(processed_tmp)
+        transcode(processed_tmp, args)
 
         # shouldn't be necessary because the program checks the exit status
         check_transcoding(processed_tmp) 
@@ -62,23 +80,23 @@ def compress_cbz(input_file, output_dir):
     os.chdir(base)
 
 
-def transcode_file(input_file, output_dir):
-    output_file = output_dir / input_file
+def transcode_file(input_file, tmp_dir, args):
+    output_file = tmp_dir / input_file
     output_file = output_file.with_suffix('.jxl')
     result = subprocess.run([
         'cjxl',
         '--brotli_effort',
-        '11',
+        str(args.brotli_effort),
         '-d',
-        '0',
+        str(args.d__distance),
         '-e',
-        '9',
+        str(args.effort),
         '-E',
-        '3',
+        str(args.modular_nb_prev_channels),
         '--num_threads',
         '0',
         input_file,
-        output_file,
+        str(output_file),
         ])
 
     if result.returncode:
@@ -90,7 +108,7 @@ def error_handler(pool, err):
     pool.terminate()
 
 
-def transcode(tmp_dir):
+def transcode(tmp_dir, args):
     extensions = ['.gif', '.jpg', '.jpeg', '.png']
 
     cwd = Path.cwd()
@@ -103,7 +121,7 @@ def transcode(tmp_dir):
     with Pool() as pool:
         handler = partial(error_handler, pool)
         for file in files:
-            pool.apply_async(transcode_file, args=(file, tmp_dir, ), error_callback = handler)
+            pool.apply_async(transcode_file, args=(file, tmp_dir, args, ), error_callback = handler)
         pool.close()
         pool.join()
 
@@ -126,17 +144,21 @@ def pack(input_file, output_dir, processed_tmp):
 
 
 def main():
-    if (len(sys.argv) != 2):
-        print(f'usage {sys.argv[0]} ouput_directory')
-        exit()
+    if (len(sys.argv) < 2):
+        sys.argv.append('-h')
+        handle_flags(sys.argv[0])
+
+    args = handle_flags(sys.argv)
+    cwd = Path.cwd()
+    args.output_directory = str(Path(args.output_directory).resolve().relative_to(cwd))
 
     output_dir = Path(sys.argv[1])
     cwd = Path.cwd()
     for comic in cwd.glob('**/*.cbz'):
         comic = comic.relative_to(cwd)
-        if str(comic).startswith(output_dir.name):
+        if str(comic).startswith(args.output_directory):
             continue
-        compress_cbz(comic, output_dir)
+        compress_cbz(comic, args)
 
 if __name__ == "__main__":
     main()
