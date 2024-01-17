@@ -161,11 +161,15 @@ def main():
 
     output_dir = Path(sys.argv[1])
     cwd = Path.cwd()
-    for comic in cwd.glob('**/*.cbz'):
+    for comic in cwd.glob('**/*.*'):
         comic = comic.relative_to(cwd)
-        if str(comic).startswith(args.output_directory):
-            continue
-        compress_cbz(comic, args)
+        if (comic.is_file() and 
+            comic.suffix in ['.cbz', '.cbr'] and not
+            str(comic).startswith(args.output_directory)):
+            
+            print(comic)
+            input()
+            compress_cbz(comic, args)
 
 if __name__ == "__main__":
     main()
