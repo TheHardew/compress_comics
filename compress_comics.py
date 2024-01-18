@@ -18,6 +18,7 @@ import sys
 import zipfile
 from argparse import ArgumentParser
 import magic
+from patoolib import extract_archive
 
 
 def error_exit(msg, code):
@@ -38,14 +39,9 @@ def glob_relative(pattern):
 
 def unpack(file, directory):
     """
-    Unpack a comic book to a directory, based on mimetype
+    Unpack a comic book to a directory
     """
-    mime_type = magic.from_file(file, mime=True)
-
-    if mime_type == "application/zip":
-        subprocess.run(["unzip", "-oO", "GB18030", str(file), "-d", str(directory)], check=True)
-    elif mime_type == "application/x-rar":
-        subprocess.run(["unrar", "x", "-o+", str(file), str(directory)], check=True)
+    extract_archive(str(file), verbosity=-1, outdir=str(directory))
 
 
 def clean_tmp_dir(tmp_dir):
