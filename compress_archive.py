@@ -155,8 +155,6 @@ def pack(input_file, output_dir, processed_tmp):
 
 def main():
     if (len(sys.argv) < 2):
-        print('Output directory not set!\n')
-        sys.argv.append('-h')
         handle_flags(sys.argv)
 
     args = handle_flags(sys.argv)
