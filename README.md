@@ -16,7 +16,7 @@ Compressess as many images in parallel as there are threads.
 Because of that, it may run out of memory on bigger resolutions.  
 
 Usage:  
-`python compress_archive.py output_directory`  
+`python compress_comics.py output_directory`  
 
 Needs `zip`, `cjxl`, and `unrar` installed and in PATH.  
 Needs the python-magic library
