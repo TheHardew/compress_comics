@@ -23,4 +23,4 @@ To check all program options:
 `python compress_comics.py -h`
 
 Needs `cjxl` installed and in PATH.  
-Needs the python-magic and patool libraries.
+Needs the patool library.
