@@ -4,19 +4,23 @@ Find all the cbz/cbr files in the current directory and subdirectories and compr
 Output files preserve the folder structure.  
 Repacks cbr into cbz.  
 
-By default compresses with:
+By default, compresses with:
 ```
 --brotli_effort 11
 -e / --effort 9
 -d / --distance 0 (lossless)
 -E / --modular_nb_prev_channels 3 
+-j / --lossless_jpeg 1
 ```
 
-Compressess as many images in parallel as there are threads.  
+Compresses as many images in parallel as there are threads.  
 Because of that, it may run out of memory on bigger resolutions.  
 
-Usage:  
+Basic usage:  
 `python compress_comics.py output_directory`  
+
+To check all program options:  
+`python compress_comics.py -h`
 
 Needs `zip`, `cjxl`, and `unrar` installed and in PATH.  
 Needs the python-magic library
