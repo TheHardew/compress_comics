@@ -11,7 +11,7 @@ import os
 from shutil import copy
 import subprocess
 from pathlib import Path
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from functools import partial
 from tempfile import TemporaryDirectory
 import sys
@@ -108,11 +108,19 @@ def handle_flags():
     parser.add_argument('-m', '--modular', type=int,
                         help='Use modular mode (not provided = encoder chooses, 0 = enforce VarDCT'
                         ', 1 = enforce modular mode).')
+    parser.add_argument('-t', '--threads', type=int, default=cpu_count(),
+                        help='The number of images to compress at once. Defaults to cpu threads.')
+    parser.add_argument('--num_threads', type=int,
+                        help='Number of threads to use to compress one image.'
+                        'Defaults to (cpu threads) / --threads')
     args = parser.parse_args()
 
     # even if it's already relative, strips things like './' from the beginning
     cwd = Path.cwd()
     args.output_directory = Path(args.output_directory).resolve().relative_to(cwd)
+
+    if not args.num_threads:
+        args.num_threads = cpu_count() // args.threads
 
     return args
 
@@ -179,7 +187,7 @@ def transcode_file(input_file, tmp_dir, args):
         '-E',
         str(args.modular_nb_prev_channels),
         '--num_threads',
-        '0',
+        str(args.num_threads),
         '-j',
         str(args.lossless_jpeg),
         input_file,
@@ -211,7 +219,7 @@ def transcode(tmp_dir, args):
 
     extensions = ['.gif', '.jpg', '.jpeg', '.png']
     files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
-    with Pool() as pool:
+    with Pool(args.threads) as pool:
         handler = partial(error_handler, pool)
         # avoid using map_async to allow the transcoding to fail early on non 0 exit status
         for file in files:
