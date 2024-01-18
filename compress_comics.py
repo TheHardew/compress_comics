@@ -17,7 +17,6 @@ from tempfile import TemporaryDirectory
 import sys
 import zipfile
 from argparse import ArgumentParser
-import magic
 from patoolib import extract_archive
 
 
@@ -106,6 +105,9 @@ def handle_flags():
                         help='If the input is JPEG, losslessly transcode JPEG, rather than using'
                              'reencoded pixels. 0 - Rencode, 1 - lossless. Default 1.')
     parser.add_argument('output_directory', type=str, help='Output directory')
+    parser.add_argument('-m', '--modular', type=int,
+                        help='Use modular mode (not provided = encoder chooses, 0 = enforce VarDCT'
+                        ', 1 = enforce modular mode).')
     args = parser.parse_args()
 
     # even if it's already relative, strips things like './' from the beginning
