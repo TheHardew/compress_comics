@@ -13,6 +13,11 @@ from argparse import ArgumentParser
 import magic
 
 
+def glob_relative(pattern):
+    cwd = Path.cwd()
+    return [f.relative_to(cwd) for f in Path.cwd().rglob(pattern)]
+
+
 def unpack(f, tmp_dir):
     mime_type = magic.from_file(f, mime=True)
 
@@ -38,19 +43,20 @@ def check_transcoding(tmp_dir):
     source_files = len([file for file in Path.cwd().glob('**/*') if file.is_file()])
     jxl_files = len([file for file in tmp_dir.glob('**/*') if file.is_file()])
     if source_files != jxl_files:
-        raise Exception('not all files transcoded - exiting')
+        raise Exception('Not all files transcoded - exiting')
 
 
 def handle_flags(args):
     name = args[0]
+    print(name)
     parser = ArgumentParser()
     # TODO handle any flags
     parser.add_argument('-e', '--effort',  type=int, help=f'Encoder effort setting. Range: 1 .. 9. Default 9.', default=9)
-    parser.add_argument('-E', '--modular_nb_prev_channels',  type=int, help=f'usage: {name}. [modular encoding] number of extra MA tree properties to use. Default 3.', default=3)
-    parser.add_argument('--brotli_effort',  type=int, help=f'usage: {name}. Brotli effort setting. Range: 0 .. 11. Default 11.', default=11)
-    parser.add_argument('-d' '--distance',  help=f'usage: {name}. Max. butteraugli distance, lower = higher quality. Default 0.', default=0)
-    parser.add_argument('-j' '--lossless_jpeg',  help=f'usage: {name}. If the input is JPEG, losslessly transcode JPEG, rather than using reencode pixels. Default 0.', default=1)
-    parser.add_argument('output_directory', type=str, help='Output drectory')
+    parser.add_argument('-E', '--modular_nb_prev_channels',  type=int, help='[modular encoding] number of extra MA tree properties to use. Default 3.', default=3)
+    parser.add_argument('--brotli_effort',  type=int, help=f'Brotli effort setting. Range: 0 .. 11. Default 11.', default=11)
+    parser.add_argument('-d', '--distance',  help=f'Max. butteraugli distance, lower = higher quality.  Default 0.', default=0)
+    parser.add_argument('-j', '--lossless_jpeg',  help=f'If the input is JPEG, losslessly transcode JPEG, rather than using reencode pixels. 0 - Rencode, 1 - lossless. Default 1.', default=1)
+    parser.add_argument('output_directory', type=str, help='Output directory')
     args = parser.parse_args()
 
     if 'help' in args:
@@ -87,7 +93,7 @@ def compress_cbz(input_file, args):
 
 def copy_files(original_dir, processed_dir):
     extensions = ['.txt', '.xml', '.jxl']
-    files = [file.relative_to(original_dir) for file in original_dir.glob('**/*') if file.suffix.lower() in extensions and file.is_file()]
+    files = [file for file in glob_relative('*') if file.suffix.lower() in extensions]
     for file in files:
         copy(file, processed_dir)
 
@@ -100,7 +106,7 @@ def transcode_file(input_file, tmp_dir, args):
         '--brotli_effort',
         str(args.brotli_effort),
         '-d',
-        str(args.d__distance),
+        str(args.distance),
         '-e',
         str(args.effort),
         '-E',
@@ -108,7 +114,7 @@ def transcode_file(input_file, tmp_dir, args):
         '--num_threads',
         '0',
         '-j',
-        str(args.j__lossless_jpeg),
+        str(args.lossless_jpeg),
         input_file,
         str(output_file),
         ])
@@ -123,17 +129,14 @@ def error_handler(pool, err):
 
 
 def transcode(tmp_dir, args):
-    extensions = ['.gif', '.jpg', '.jpeg', '.png']
-
-    cwd = Path.cwd()
-    files = [file.relative_to(cwd) for file in cwd.glob('**/*') if file.suffix.lower() in extensions and file.is_file()]
-
-    for dir in cwd.glob('**/*/'):
-        dir = dir.relative_to(cwd)
+    for dir in glob_relative('*/'):
         os.makedirs(tmp_dir / dir, exist_ok=True)
 
+    extensions = ['.gif', '.jpg', '.jpeg', '.png']
+    files = [file for file in glob_relative('*') if file.suffix.lower() in extensions and file.is_file()]
     with Pool() as pool:
         handler = partial(error_handler, pool)
+        # avoid using map_async to allow the transcoding to fail early on non 0 exit status
         for file in files:
             pool.apply_async(transcode_file, args=(file, tmp_dir, args, ), error_callback = handler)
         pool.close()
@@ -146,15 +149,15 @@ def pack(input_file, output_dir, processed_tmp):
     output_file.with_suffix('.zip')
 
     with zipfile.ZipFile(output_file, "w", compression=zipfile.ZIP_STORED) as zipf:
-        for file in processed_tmp.glob('**/*'):
-            file = file.relative_to(processed_tmp)
+        for file in glob_relative('*'):
             zipf.write(file, arcname=file)
 
 
 def main():
     if (len(sys.argv) < 2):
+        print('Output directory not set!\n')
         sys.argv.append('-h')
-        handle_flags(sys.argv[0])
+        handle_flags(sys.argv)
 
     args = handle_flags(sys.argv)
     cwd = Path.cwd()
@@ -162,8 +165,7 @@ def main():
 
     output_dir = Path(sys.argv[1])
     cwd = Path.cwd()
-    for comic in cwd.glob('**/*.*'):
-        comic = comic.relative_to(cwd)
+    for comic in glob_relative('*'):
         if (comic.is_file() and 
             comic.suffix in ['.cbz', '.cbr'] and not
             str(comic).startswith(args.output_directory)):
