@@ -16,7 +16,7 @@ from functools import partial
 from tempfile import TemporaryDirectory
 import sys
 import zipfile
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from patoolib import extract_archive
 
 
@@ -167,6 +167,13 @@ def copy_files(processed_dir):
         copy(file, processed_dir)
 
 
+def stringify_arguments(args):
+    """
+    Changes all the arguments inside argparse.Namespace into strings
+    """
+    return Namespace(**{k: str(v) for k, v in vars(args).items()})
+
+
 def transcode_file(input_file, tmp_dir, args):
     """
     Compress a single image file
@@ -179,17 +186,17 @@ def transcode_file(input_file, tmp_dir, args):
     subprocess.run([
         'cjxl',
         '--brotli_effort',
-        str(args.brotli_effort),
+        args.brotli_effort,
         '-d',
-        str(args.distance),
+        args.distance,
         '-e',
-        str(args.effort),
+        args.effort,
         '-E',
-        str(args.modular_nb_prev_channels),
+        args.modular_nb_prev_channels,
         '--num_threads',
-        str(args.num_threads),
+        args.num_threads,
         '-j',
-        str(args.lossless_jpeg),
+        args.lossless_jpeg,
         input_file,
         str(output_file),
     ],
@@ -220,6 +227,7 @@ def transcode(tmp_dir, args):
     extensions = ['.gif', '.jpg', '.jpeg', '.png']
     files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
     with Pool(args.threads) as pool:
+        args = stringify_arguments(args)
         handler = partial(error_handler, pool)
         # avoid using map_async to allow the transcoding to fail early on non 0 exit status
         for file in files:
