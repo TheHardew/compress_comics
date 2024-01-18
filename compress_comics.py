@@ -8,12 +8,12 @@ Repacks cbr into cbz.
 """
 
 import os
-from shutil import copy
+from shutil import copy, move
 import subprocess
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from functools import partial
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, NamedTemporaryFile
 import sys
 import zipfile
 from argparse import ArgumentParser, Namespace
@@ -104,7 +104,6 @@ def handle_flags():
     parser.add_argument('-j', '--lossless_jpeg', type=int, default=1,
                         help='If the input is JPEG, losslessly transcode JPEG, rather than using'
                              'reencoded pixels. 0 - Rencode, 1 - lossless. Default 1.')
-    parser.add_argument('output_directory', type=str, help='Output directory')
     parser.add_argument('-m', '--modular', type=int,
                         help='Use modular mode (not provided = encoder chooses, 0 = enforce VarDCT'
                         ', 1 = enforce modular mode).')
@@ -113,11 +112,19 @@ def handle_flags():
     parser.add_argument('--num_threads', type=int,
                         help='Number of threads to use to compress one image.'
                         'Defaults to (cpu threads) / --threads')
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('output_directory', type=str, help='Output directory', nargs='?')
+    group.add_argument('-o', '--overwrite', action='store_true',
+                        help='Overwrite the original file. Defaults to False.')
+
     args = parser.parse_args()
 
     # even if it's already relative, strips things like './' from the beginning
     cwd = Path.cwd()
-    args.output_directory = Path(args.output_directory).resolve().relative_to(cwd)
+
+    if not args.overwrite:
+        args.output_directory = Path(args.output_directory).resolve().relative_to(cwd)
 
     if not args.num_threads:
         args.num_threads = cpu_count() // args.threads
@@ -125,15 +132,41 @@ def handle_flags():
     return args
 
 
-def compress_cbz(input_file, args):
+def pack(args, input_file, working_directory, processed_tmp):
+    """
+    Save the processed comic book, either to the output directory, or to a new temporary
+    file and then overwrite the original. This way no data will be lost if we there is no space
+    left on the device
+    :param args: the program arguments
+    :param input_file: the original file to derive the name
+    :param woking_directory: program working_directory
+    :param processed_tmp: the processed files
+    """
+    directory = working_directory
+    if args.overwrite:
+        directory /= input_file.parent
+        try:
+            with NamedTemporaryFile(dir=directory, prefix='.' + input_file.name) as tmp:
+                create_comic_archive(tmp.name, processed_tmp)
+                move(tmp.name, working_directory / input_file)
+        except FileNotFoundError:
+            # file was moved so nothing to clean up
+            pass
+    else:
+        directory /= args.output_directory
+        os.makedirs(directory / input_file.parent, exist_ok=True)
+        name = directory / input_file
+        name = name.with_suffix('.cbz')
+        create_comic_archive(name, processed_tmp)
+
+
+def compress_comic(input_file, args):
     """
     Compress a comic book
     :param input_file: the comic book to compress
     :param args: compression arguments
     """
-    base = Path.cwd()
-    output_dir_absolute = Path(args.output_directory).resolve()
-    os.makedirs(output_dir_absolute / input_file.parent, exist_ok=True)
+    base = Path.cwd().resolve()
 
     with (
         TemporaryDirectory() as original_tmp,
@@ -151,7 +184,7 @@ def compress_cbz(input_file, args):
 
         # shouldn't be necessary because the program checks the exit status
         check_transcoding(processed_tmp)
-        pack(input_file, output_dir_absolute, processed_tmp)
+        pack(args, input_file, base, processed_tmp)
 
     os.chdir(base)
 
@@ -236,20 +269,17 @@ def transcode(tmp_dir, args):
         pool.join()
 
 
-def pack(input_file, output_dir, processed_tmp):
+def create_comic_archive(output_file, processed_tmp):
     """
     Pack a directory to a comic book
-    :param input_file: the original comic book. Used to derive output name
-    :param output_dir: the output directory
+    :param output_file: the file to compress the comic book to
     :param processed_tmp: the directory of the files to compress
     """
     os.chdir(processed_tmp)
-    output_file = output_dir / input_file
-    output_file.with_suffix('.zip')
 
     with zipfile.ZipFile(output_file, "w", compression=zipfile.ZIP_STORED) as zipf:
         for file in glob_relative('*'):
-            zipf.write(file, arcname=file)
+            zipf.write(file)
 
 
 def main():
@@ -261,7 +291,7 @@ def main():
         if (comic.is_file() and
                 comic.suffix in ['.cbz', '.cbr'] and
                 args.output_directory not in comic.parents):
-            compress_cbz(comic, args)
+            compress_comic(comic, args)
 
 
 if __name__ == "__main__":
