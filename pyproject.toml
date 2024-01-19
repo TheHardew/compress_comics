@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "compress_comics_TheHardew"
+version = "0.0.1"
+authors = [
+  { name="TheHardew" },
+]
+description = "Compress images in cbz/cbr files with jpegxl, fast."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: The Unlicense (Unlicense)",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+	"patool"
+]
+
+[project.urls]
+Homepage = "https://github.com/TheHardew/compress_comics"
+Issues = "https://github.com/TheHardew/compress_comics/issues"
+
+[project.scripts]
+compress_comics = "compress_comics:main"
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+	"src/", 
+	"README.md",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+	"src/", 
+	"README.md",
+]
