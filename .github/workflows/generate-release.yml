@@ -1,0 +1,28 @@
+name: Release new versions
+on:
+  push:
+    tags:
+      - '*'
+jobs:
+  generate-release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.11
+
+    - name: Install build tools
+      run: python -m pip install build
+
+    - name: Build the package
+      run: python -m build
+
+    - name: Create Release
+      run: |
+        gh release create "${{ github.ref_name }}" -t "Release ${{ github.ref_name }}" dist/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
