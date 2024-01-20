@@ -141,6 +141,7 @@ def pack(args, input_file, working_directory, processed_tmp):
     :param input_file: the original file to derive the name
     :param woking_directory: program working_directory
     :param processed_tmp: the processed files
+    :return: the path to the created file
     """
     directory = working_directory
     if args.overwrite:
@@ -152,12 +153,30 @@ def pack(args, input_file, working_directory, processed_tmp):
         except FileNotFoundError:
             # file was moved so nothing to clean up
             pass
+        return working_directory / input_file
     else:
         directory /= args.output_directory
         os.makedirs(directory / input_file.parent, exist_ok=True)
         name = directory / input_file
         name = name.with_suffix('.cbz')
         create_comic_archive(name, processed_tmp)
+        return name
+
+
+def sizeof_fmt(num, suffix="B"):
+    for unit in ("", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"):
+        if abs(num) < 1024.0:
+            return f"{num:3.1f} {unit}{suffix}"
+        num /= 1024.0
+    return f"{num:.1f}Yi{suffix}"
+
+
+def print_statistics(original_size, compressed_size, input_file):
+    print(input_file)
+    print(sizeof_fmt(compressed_size), end='')
+    print('/', end='')
+    print(sizeof_fmt(original_size), end='')
+    print(f' - {compressed_size / original_size * 100:.1f}%')
 
 
 def compress_comic(input_file, args):
@@ -172,6 +191,8 @@ def compress_comic(input_file, args):
         TemporaryDirectory() as original_tmp,
         TemporaryDirectory() as processed_tmp
     ):
+        original_size = os.path.getsize(input_file)
+
         original_tmp = Path(original_tmp)
         processed_tmp = Path(processed_tmp)
         unpack(input_file, original_tmp)
@@ -184,9 +205,12 @@ def compress_comic(input_file, args):
 
         # shouldn't be necessary because the program checks the exit status
         check_transcoding(processed_tmp)
-        pack(args, input_file, base, processed_tmp)
+        compressed_name = pack(args, input_file, base, processed_tmp)
+
+        compressed_size = os.path.getsize(compressed_name)
 
     os.chdir(base)
+    print_statistics(original_size, compressed_size, input_file)
 
 
 def copy_files(processed_dir):
