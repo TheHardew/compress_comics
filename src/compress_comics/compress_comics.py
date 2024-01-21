@@ -12,12 +12,13 @@ from shutil import copy, move
 import subprocess
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
-from functools import partial
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 import sys
 import zipfile
 from argparse import ArgumentParser, Namespace
 from patoolib import extract_archive
+from tqdm import tqdm
+from custom_bar import custom_bar_format
 
 
 def error_exit(msg, code):
@@ -179,7 +180,7 @@ def compress_comic(input_file, args):
         check_file_types(original_tmp)
 
         os.chdir(original_tmp)
-        transcode(processed_tmp, args)
+        transcode(processed_tmp, input_file, args)
         copy_files(processed_tmp)
 
         # shouldn't be necessary because the program checks the exit status
@@ -233,22 +234,13 @@ def transcode_file(input_file, tmp_dir, args):
         input_file,
         str(output_file),
     ],
-        check=True
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
     )
 
 
-def error_handler(pool, err):
-    """
-    Error handler for the other processes.
-    Stops the processing early in case of a transcoding error
-    :param pool: the multiprocessing pool to terminate
-    :param err: the error message
-    """
-    print(err)
-    pool.terminate()
-
-
-def transcode(tmp_dir, args):
+def transcode(tmp_dir, input_file, args):
     """
     Compress all the image files in the current directory
     :param tmp_dir: the directory to compress it to
@@ -259,14 +251,26 @@ def transcode(tmp_dir, args):
 
     extensions = ['.gif', '.jpg', '.jpeg', '.png']
     files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
-    with Pool(args.threads) as pool:
+    with Pool(args.threads) as pool, tqdm(total=len(files), unit='img', colour='#ff004c') as pbar:
         args = stringify_arguments(args)
-        handler = partial(error_handler, pool)
-        # avoid using map_async to allow the transcoding to fail early on non 0 exit status
+        def update_bar(*a):
+            pbar.bar_format = custom_bar_format(input_file.name, pbar)
+            pbar.update()
+
+        def error_handler(err):
+            print(err)
+            pool.terminate()
+
+        pbar.display()
         for file in files:
-            pool.apply_async(transcode_file, args=(file, tmp_dir, args,), error_callback=handler)
+            pool.apply_async(transcode_file,
+                             (file, tmp_dir, args, ),
+                             callback=update_bar,
+                             error_callback=error_handler
+                             )
         pool.close()
         pool.join()
+        pbar.bar_format = custom_bar_format(input_file.name, pbar)
 
 
 def create_comic_archive(output_file, processed_tmp):
@@ -287,11 +291,22 @@ def main():
     Find all cbz/cbr books in the current directory and process them.
     """
     args = handle_flags()
-    for comic in glob_relative('*'):
-        if (comic.is_file() and
-                comic.suffix in ['.cbz', '.cbr'] and
-                args.output_directory not in comic.parents):
-            compress_comic(comic, args)
+    comic_books = [comic for comic in glob_relative('*') if (
+        comic.is_file() and comic.suffix.lower() in ['.cbr', '.cbz'] and
+        args.output_directory not in comic.parents
+        )]
+
+    with tqdm(comic_books, position=2, unit='book', colour='#ff004c') as pbar:
+        pbar.bar_format = custom_bar_format('Comic books', pbar)
+        for book in comic_books:
+            compress_comic(book, args)
+            pbar.display('', 1)
+            pbar.update()
+            pbar.bar_format = custom_bar_format('Comic books', pbar)
+            pbar.refresh()
+
+        pbar.display('\n', 2)
+
 
 
 if __name__ == "__main__":
