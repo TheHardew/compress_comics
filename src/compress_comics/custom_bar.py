@@ -26,8 +26,6 @@ def get_base_bar_length(pbar, bar_format):
     """
     pbar.bar_format = bar_format
     base_bar_length = len(str(pbar))
-    if pbar.n == 0:
-        base_bar_length += 8
     return base_bar_length
 
 

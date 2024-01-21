@@ -254,14 +254,17 @@ def transcode(tmp_dir, input_file, args):
     with Pool(args.threads) as pool, tqdm(total=len(files), unit='img', colour='#ff004c') as pbar:
         args = stringify_arguments(args)
         def update_bar(*a):
-            pbar.bar_format = custom_bar_format(input_file.name, pbar)
             pbar.update()
+            pbar.bar_format = custom_bar_format(input_file.name, pbar)
+            pbar.refresh()
 
         def error_handler(err):
             print(err)
             pool.terminate()
 
-        pbar.display()
+        pbar.bar_format = custom_bar_format(input_file.name, pbar)
+        pbar.refresh()
+        pbar.bar_format = ''
         for file in files:
             pool.apply_async(transcode_file,
                              (file, tmp_dir, args, ),
@@ -298,15 +301,16 @@ def main():
 
     with tqdm(comic_books, position=2, unit='book', colour='#ff004c') as pbar:
         pbar.bar_format = custom_bar_format('Comic books', pbar)
+        pbar.refresh()
+        pbar.bar_format = ''
         for book in comic_books:
             compress_comic(book, args)
-            pbar.display('', 1)
+            pbar.display('', 1) # clear position 1
             pbar.update()
             pbar.bar_format = custom_bar_format('Comic books', pbar)
             pbar.refresh()
 
-        pbar.display('\n', 2)
-
+        pbar.display('', 2)
 
 
 if __name__ == "__main__":
