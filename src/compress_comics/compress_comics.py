@@ -17,8 +17,7 @@ import sys
 import zipfile
 from argparse import ArgumentParser, Namespace
 from patoolib import extract_archive
-from tqdm import tqdm
-from custom_bar import custom_bar_format
+from text_bar import TextBar
 
 
 def error_exit(msg, code):
@@ -251,20 +250,18 @@ def transcode(tmp_dir, input_file, args):
 
     extensions = ['.gif', '.jpg', '.jpeg', '.png']
     files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
-    with Pool(args.threads) as pool, tqdm(total=len(files), unit='img', colour='#ff004c') as pbar:
+    with (
+            Pool(args.threads) as pool,
+            TextBar(total=len(files), text=input_file.name, unit='img', colour='#ff004c') as pbar
+            ):
         args = stringify_arguments(args)
         def update_bar(*a):
             pbar.update()
-            pbar.bar_format = custom_bar_format(input_file.name, pbar)
-            pbar.refresh()
 
         def error_handler(err):
             print(err)
             pool.terminate()
 
-        pbar.bar_format = custom_bar_format(input_file.name, pbar)
-        pbar.refresh()
-        pbar.bar_format = ''
         for file in files:
             pool.apply_async(transcode_file,
                              (file, tmp_dir, args, ),
@@ -273,7 +270,6 @@ def transcode(tmp_dir, input_file, args):
                              )
         pool.close()
         pool.join()
-        pbar.bar_format = custom_bar_format(input_file.name, pbar)
 
 
 def create_comic_archive(output_file, processed_tmp):
@@ -299,16 +295,15 @@ def main():
         args.output_directory not in comic.parents
         )]
 
-    with tqdm(comic_books, position=2, unit='book', colour='#ff004c') as pbar:
-        pbar.bar_format = custom_bar_format('Comic books', pbar)
-        pbar.refresh()
-        pbar.bar_format = ''
+    with TextBar(total=len(comic_books),
+                 text='Comic books',
+                 position=2,
+                 unit='book',
+                 colour='#ff004c') as pbar:
         for book in comic_books:
             compress_comic(book, args)
             pbar.display('', 1) # clear position 1
             pbar.update()
-            pbar.bar_format = custom_bar_format('Comic books', pbar)
-            pbar.refresh()
 
         pbar.display('', 2)
 
