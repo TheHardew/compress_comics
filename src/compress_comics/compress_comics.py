@@ -144,7 +144,7 @@ def pack(args, input_file, working_directory, processed_tmp):
     :return: the path to the created file
     """
     directory = working_directory
-    if args.overwrite:
+    if args.overwrite == True:
         directory /= input_file.parent
         try:
             with NamedTemporaryFile(dir=directory, prefix='.' + input_file.name) as tmp:
@@ -163,20 +163,23 @@ def pack(args, input_file, working_directory, processed_tmp):
         return name
 
 
-def sizeof_fmt(num, suffix="B"):
-    for unit in ("", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"):
-        if abs(num) < 1024.0:
-            return f"{num:3.1f} {unit}{suffix}"
-        num /= 1024.0
-    return f"{num:.1f}Yi{suffix}"
+def statistics_string(original_size, compressed_size, prefix):
+    """
+    Return a statistics string, e.g.:
+    A.cbz - 10 MiB / 15 MiB - 67%
+    :param prefix: what string to include at the beginning
+    """
 
+    # to MiB
+    difference = compressed_size - original_size
+    original_size //= 1024 * 1024 
+    compressed_size //= 1024 * 1024 
+    difference //= 1024 * 1024
 
-def print_statistics(original_size, compressed_size, input_file):
-    print(input_file)
-    print(sizeof_fmt(compressed_size), end='')
-    print('/', end='')
-    print(sizeof_fmt(original_size), end='')
-    print(f' - {compressed_size / original_size * 100:.1f}%')
+    return (prefix + ' - ' +
+        f'{compressed_size}/{original_size}' +
+        f' ({difference}) [MiB]' +
+        f' {round(compressed_size / original_size * 100)}%')
 
 
 def compress_comic(input_file, args):
@@ -184,6 +187,7 @@ def compress_comic(input_file, args):
     Compress a comic book
     :param input_file: the comic book to compress
     :param args: compression arguments
+    :return: the name of the compressed file
     """
     base = Path.cwd().resolve()
 
@@ -191,7 +195,6 @@ def compress_comic(input_file, args):
         TemporaryDirectory() as original_tmp,
         TemporaryDirectory() as processed_tmp
     ):
-        original_size = os.path.getsize(input_file)
 
         original_tmp = Path(original_tmp)
         processed_tmp = Path(processed_tmp)
@@ -200,17 +203,10 @@ def compress_comic(input_file, args):
         check_file_types(original_tmp)
 
         os.chdir(original_tmp)
-        transcode(processed_tmp, input_file, args)
-        copy_files(processed_tmp)
-
-        # shouldn't be necessary because the program checks the exit status
-        check_transcoding(processed_tmp)
-        compressed_name = pack(args, input_file, base, processed_tmp)
-
-        compressed_size = os.path.getsize(compressed_name)
+        compressed_name = transcode(processed_tmp, input_file, args, base)
 
     os.chdir(base)
-    print_statistics(original_size, compressed_size, input_file)
+    return compressed_name
 
 
 def copy_files(processed_dir):
@@ -240,6 +236,8 @@ def transcode_file(input_file, tmp_dir, args):
     """
     output_file = tmp_dir / input_file
     output_file = output_file.with_suffix('.jxl')
+
+
     subprocess.run([
         'cjxl',
         '--brotli_effort',
@@ -263,14 +261,17 @@ def transcode_file(input_file, tmp_dir, args):
     )
 
 
-def transcode(tmp_dir, input_file, args):
+def transcode(tmp_dir, input_file, args, base):
     """
     Compress all the image files in the current directory
     :param tmp_dir: the directory to compress it to
     :param args: compression arguments to pass to cjxl
+    :return: the name of the compressed file
     """
     for directory in glob_relative('*/'):
         os.makedirs(tmp_dir / directory, exist_ok=True)
+
+    original_size = os.path.getsize(base / input_file)
 
     extensions = ['.gif', '.jpg', '.jpeg', '.png']
     files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
@@ -294,6 +295,17 @@ def transcode(tmp_dir, input_file, args):
                              )
         pool.close()
         pool.join()
+
+        copy_files(tmp_dir)
+
+        # shouldn't be necessary because the program checks the exit status
+        check_transcoding(tmp_dir)
+        compressed_name = pack(args, input_file, base, tmp_dir)
+        compressed_size = os.path.getsize(compressed_name)
+        pbar.close(text=statistics_string(original_size, compressed_size, input_file.name))
+
+    return compressed_name
+
 
 
 def create_comic_archive(output_file, processed_tmp):
@@ -319,17 +331,22 @@ def main():
         args.output_directory not in comic.parents
         )]
 
+    original_size = sum([os.path.getsize(f) for f in comic_books])
+    compressed_size = 0
+
     with TextBar(total=len(comic_books),
                  text='Comic books',
                  position=2,
                  unit='book',
                  colour='#ff004c') as pbar:
         for book in comic_books:
-            compress_comic(book, args)
+            compressed_name = compress_comic(book, args)
+            compressed_size += os.path.getsize(compressed_name)
             pbar.display('', 1) # clear position 1
             pbar.update()
 
         pbar.display('', 2)
+        pbar.close(text=statistics_string(original_size, compressed_size, 'Comic books'))
 
 
 if __name__ == "__main__":
