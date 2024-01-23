@@ -11,12 +11,13 @@ import os
 from shutil import copy, move
 import subprocess
 from pathlib import Path
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, Manager
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 import sys
 import zipfile
 from argparse import ArgumentParser, Namespace
 from patoolib import extract_archive
+import traceback
 from text_bar import TextBar
 
 
@@ -55,34 +56,22 @@ def clean_tmp_dir(tmp_dir):
         file.unlink()
 
 
-def check_file_types(tmp_dir):
+def check_transcoding(output_file):
     """
     Make sure that all the files left in the comic book can be handled by the program.
     If there are files left that the program is not sure how to handle, stop processing the book.
     :param tmp_dir: the processed directory to check
     """
     extensions = ['.gif', '.jpg', '.jpeg', '.png', '.jxl', '.xml', '.txt']
-    files = [f for f in tmp_dir.glob('**/*') if f.is_file() and f.suffix.lower() not in extensions]
+    transcoded_extensions = ['.jpg', '.jpeg', '.png', '.gif']
 
-    extension_string = '/'.join([ext[1:] for ext in extensions])
-    if len(files):
-        print(f'Some files are not {extension_string}:')
-        for file in files:
-            print(file)
-
-        error_exit(f'Some files are not {extension_string}', 1)
-
-
-def check_transcoding(tmp_dir):
-    """
-    Check that the input and output directories have the same number of files.
-    If not, some files where not processed.
-    :param tmp_dir: the processed directory to check.
-    """
-    source_files = len([file for file in Path.cwd().glob('**/*') if file.is_file()])
-    jxl_files = len([file for file in tmp_dir.glob('**/*') if file.is_file()])
-    if source_files != jxl_files:
-        error_exit('Not all files transcoded', 2)
+    with zipfile.ZipFile(output_file, 'r') as zipf:
+        for f in glob_relative('*'):
+            if f.suffix.lower() in transcoded_extensions:
+                f = f.with_suffix('.jxl')
+            
+            if f.is_file() and f not in zipf.namelist():
+                error_exit(f'Some files were not copied {extension_string}', 1)
 
 
 def handle_flags():
@@ -132,34 +121,20 @@ def handle_flags():
     return args
 
 
-def pack(args, input_file, working_directory, processed_tmp):
-    """
-    Save the processed comic book, either to the output directory, or to a new temporary
-    file and then overwrite the original. This way no data will be lost if we there is no space
-    left on the device
-    :param args: the program arguments
-    :param input_file: the original file to derive the name
-    :param woking_directory: program working_directory
-    :param processed_tmp: the processed files
-    :return: the path to the created file
-    """
+def get_output_filename(args, input_file, working_directory):
     directory = working_directory
     if args.overwrite == True:
         directory /= input_file.parent
-        try:
-            with NamedTemporaryFile(dir=directory, prefix='.' + input_file.name) as tmp:
-                create_comic_archive(tmp.name, processed_tmp)
-                move(tmp.name, working_directory / input_file)
-        except FileNotFoundError:
-            # file was moved so nothing to clean up
-            pass
-        return working_directory / input_file
+        tmp_zip = NamedTemporaryFile(dir=directory, prefix='.' + input_file.name, delete=False).name
+        return working_directory / tmp_zip
     else:
         directory /= args.output_directory
         os.makedirs(directory / input_file.parent, exist_ok=True)
         name = directory / input_file
         name = name.with_suffix('.cbz')
-        create_comic_archive(name, processed_tmp)
+
+        if name.exists():
+            error_exit(f'File exists - {name}', 3)
         return name
 
 
@@ -193,31 +168,28 @@ def compress_comic(input_file, args):
 
     with (
         TemporaryDirectory() as original_tmp,
-        TemporaryDirectory() as processed_tmp
     ):
 
         original_tmp = Path(original_tmp)
-        processed_tmp = Path(processed_tmp)
         unpack(input_file, original_tmp)
         clean_tmp_dir(original_tmp)
-        check_file_types(original_tmp)
-
         os.chdir(original_tmp)
-        compressed_name = transcode(processed_tmp, input_file, args, base)
+        compressed_name = transcode(input_file, args, base)
 
     os.chdir(base)
     return compressed_name
 
 
-def copy_files(processed_dir):
+def copy_files(zip_buffer):
     """
     Copy some files from the original comic book without changing them
     :param processed_dir: the directory to copy to
     """
     extensions = ['.txt', '.xml', '.jxl']
     files = [file for file in glob_relative('*') if file.suffix.lower() in extensions]
-    for file in files:
-        copy(file, processed_dir)
+    with zipfile.ZipFile(zip_buffer, 'a', compression=zipfile.ZIP_STORED) as zipf:
+        for file in files:
+            zipf.write(file)
 
 
 def stringify_arguments(args):
@@ -227,18 +199,17 @@ def stringify_arguments(args):
     return Namespace(**{k: str(v) for k, v in vars(args).items()})
 
 
-def transcode_file(input_file, tmp_dir, args):
+def transcode_file(input_file, args, lock, zip_file):
     """
     Compress a single image file
     :param input_file: the file to compress
     :param tmp_dir: the directory to compress it to
     :param args: the compression arguments to pass to cjxl
+    :return: the compressed size
     """
-    output_file = tmp_dir / input_file
-    output_file = output_file.with_suffix('.jxl')
+    output_file = input_file.with_suffix('.jxl')
 
-
-    subprocess.run([
+    result = subprocess.run([
         'cjxl',
         '--brotli_effort',
         args.brotli_effort,
@@ -253,32 +224,34 @@ def transcode_file(input_file, tmp_dir, args):
         '-j',
         args.lossless_jpeg,
         input_file,
-        str(output_file),
+        '/dev/stdout'
     ],
         check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.STDOUT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     )
 
+    with lock:
+        with zipfile.ZipFile(zip_file, 'a', compression=zipfile.ZIP_STORED) as zipf:
+            zipf.writestr(str(output_file), result.stdout)
 
-def transcode(tmp_dir, input_file, args, base):
+
+def transcode(input_file, args, base):
     """
     Compress all the image files in the current directory
-    :param tmp_dir: the directory to compress it to
     :param args: compression arguments to pass to cjxl
     :return: the name of the compressed file
     """
-    for directory in glob_relative('*/'):
-        os.makedirs(tmp_dir / directory, exist_ok=True)
-
     original_size = os.path.getsize(base / input_file)
 
     extensions = ['.gif', '.jpg', '.jpeg', '.png']
     files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
     with (
             Pool(args.threads) as pool,
-            TextBar(total=len(files), text=input_file.name, unit='img', colour='#ff004c') as pbar
+            TextBar(total=len(files), text=input_file.name, unit='img', colour='#ff004c') as pbar,
+            Manager() as manager
             ):
+        output_file = get_output_filename(args, input_file, base)
         args = stringify_arguments(args)
         def update_bar(*a):
             pbar.update()
@@ -287,38 +260,43 @@ def transcode(tmp_dir, input_file, args, base):
             print(err)
             pool.terminate()
 
-        for file in files:
-            pool.apply_async(transcode_file,
-                             (file, tmp_dir, args, ),
-                             callback=update_bar,
-                             error_callback=error_handler
-                             )
-        pool.close()
-        pool.join()
+        lock = manager.Lock()
 
-        copy_files(tmp_dir)
+        try:
+            for i, file in enumerate(files):
+                #transcode_file(file, tmp_dir, args, lock, zip_buffer)
+                pool.apply_async(transcode_file,
+                                 (file, args, lock, output_file),
+                                 callback=update_bar,
+                                 error_callback=error_handler
+                                 )
+            pool.close()
+            pool.join()
+            copy_files(output_file)
+            # shouldn't be necessary because the program checks the exit status
+            check_transcoding(output_file)
+            compressed_size = os.path.getsize(output_file)
+            if args.overwrite == 'True':
+                move(output_file, base / input_file)
+            #create_comic_archive(output_file, zip_buffer)
+            pbar.close(text=statistics_string(original_size, compressed_size, input_file.name))
+        except Exception as e:
+            output_file.unlink()
 
-        # shouldn't be necessary because the program checks the exit status
-        check_transcoding(tmp_dir)
-        compressed_name = pack(args, input_file, base, tmp_dir)
-        compressed_size = os.path.getsize(compressed_name)
-        pbar.close(text=statistics_string(original_size, compressed_size, input_file.name))
-
-    return compressed_name
+    if args.overwrite == 'True':
+        return input_file
+    else:
+        return output_file
 
 
-
-def create_comic_archive(output_file, processed_tmp):
+def create_comic_archive(output_file, zip_buffer):
     """
     Pack a directory to a comic book
     :param output_file: the file to compress the comic book to
     :param processed_tmp: the directory of the files to compress
     """
-    os.chdir(processed_tmp)
-
-    with zipfile.ZipFile(output_file, "w", compression=zipfile.ZIP_STORED) as zipf:
-        for file in glob_relative('*'):
-            zipf.write(file)
+    with open(output_file, 'wb') as f:
+        f.write(zip_buffer)
 
 
 def main():
@@ -350,4 +328,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+    # Print the exception and the stack trace
+        print(f"An error occurred: {e}")
+        traceback.print_exc()
