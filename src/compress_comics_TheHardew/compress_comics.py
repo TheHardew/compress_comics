@@ -21,14 +21,6 @@ import traceback
 from .text_bar import TextBar
 
 
-def error_exit(msg, code):
-    """
-    Print an error message and exit with a code
-    """
-    print('Error:', msg, file=sys.stderr)
-    sys.exit(code)
-
-
 def glob_relative(pattern):
     """
     Recursively get a relative list of files in the current directory matching a glob pattern
@@ -71,7 +63,7 @@ def check_transcoding(output_file):
                 f = f.with_suffix('.jxl')
             
             if f.is_file() and f.as_posix() not in zipf.namelist():
-                error_exit(f'Some files were not copied {extension_string}', 1)
+                raise Exception(f'Some files were not copied {extension_string}')
 
 
 def handle_flags():
@@ -134,7 +126,7 @@ def get_output_filename(args, input_file, working_directory):
         name = name.with_suffix('.cbz')
 
         if name.exists():
-            error_exit(f'File exists - {name}', 3)
+            raise Exception(f'File exists - {name}')
         return name
 
 
@@ -147,10 +139,10 @@ def statistics_string(original_size, compressed_size, prefix):
 
     # to MiB
     difference = compressed_size - original_size
-    quotient = round(compressed_size / original_size * 100)
-    original_size = round(original_size / 1024 * 1024) 
-    compressed_size = round(compressed_size / 1024 * 1024)
-    difference = round(difference / 1024 * 1024)
+    quotient = round(compressed_size / original_size / 100)
+    original_size = round(original_size / 1024 / 1024) 
+    compressed_size = round(compressed_size / 1024 / 1024)
+    difference = round(difference / 1024 / 1024)
 
     return (prefix + ' - ' +
         f'{compressed_size}/{original_size}' +
@@ -167,16 +159,24 @@ def compress_comic(input_file, args):
     """
     base = Path.cwd().resolve()
 
-    with (
-        TemporaryDirectory() as original_tmp,
-    ):
+    try:
+        with (
+            TemporaryDirectory() as original_tmp,
+        ):
 
-        original_tmp = Path(original_tmp)
-        unpack(input_file, original_tmp)
-        clean_tmp_dir(original_tmp)
-        os.chdir(original_tmp)
-        compressed_name = transcode(input_file, args, base)
+            original_tmp = Path(original_tmp)
+            unpack(input_file, original_tmp)
+            clean_tmp_dir(original_tmp)
+            os.chdir(original_tmp)
+            compressed_name = transcode(input_file, args, base)
+            os.chdir(base)
+    except Exception as e:
+        print(e)
         os.chdir(base)
+        original_tmp = Path(original_tmp)
+        if original_tmp.exists():
+            original_tmp.unlink()
+        return
 
     return compressed_name
 
@@ -283,7 +283,9 @@ def transcode(input_file, args, base):
                 move(output_file, base / input_file)
             pbar.close(text=statistics_string(original_size, compressed_size, input_file.name))
         except Exception as e:
+            print(e)
             output_file.unlink()
+            return ''
 
     if args.overwrite == 'True':
         return input_file
@@ -311,7 +313,7 @@ def main():
                  colour='#ff004c') as pbar:
         for book in comic_books:
             compressed_name = compress_comic(book, args)
-            compressed_size += os.path.getsize(compressed_name)
+            compressed_size += os.path.getsize(compressed_name if compressed_name else book)
             pbar.display('', 1) # clear position 1
             pbar.update()
 
