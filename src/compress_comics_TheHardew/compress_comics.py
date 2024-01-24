@@ -67,10 +67,10 @@ def check_transcoding(output_file):
 
     with zipfile.ZipFile(output_file, 'r') as zipf:
         for f in glob_relative('*'):
-            if f.suffix.lower() in transcoded_extensions:
+            if f.is_file() and f.suffix.lower() in transcoded_extensions:
                 f = f.with_suffix('.jxl')
             
-            if f.is_file() and f not in zipf.namelist():
+            if f.is_file() and f.as_posix() not in zipf.namelist():
                 error_exit(f'Some files were not copied {extension_string}', 1)
 
 
@@ -209,6 +209,8 @@ def transcode_file(input_file, args, lock, zip_file):
     """
     output_file = input_file.with_suffix('.jxl')
 
+    cjxl_output = '/dev/stdout' if Path('/dev/stdout').exists() else '-'
+
     result = subprocess.run([
         'cjxl',
         '--brotli_effort',
@@ -224,7 +226,7 @@ def transcode_file(input_file, args, lock, zip_file):
         '-j',
         args.lossless_jpeg,
         input_file,
-        '/dev/stdout'
+        cjxl_output
     ],
         check=True,
         stdout=subprocess.PIPE,
