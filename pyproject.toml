@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "compress_comics_TheHardew"
-version = "v0.3.0"
+version = "v0.3.1"
 authors = [
   { name="TheHardew" },
 ]
@@ -26,16 +26,10 @@ Homepage = "https://github.com/TheHardew/compress_comics"
 Issues = "https://github.com/TheHardew/compress_comics/issues"
 
 [project.scripts]
-compress_comics = "compress_comics:main"
+compress_comics = "compress_comics_TheHardew:main"
 
 [tool.hatch.build.targets.sdist]
 only-include = [
 	"src/", 
-	"README.md",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = [
-	"src/", 
-	"README.md",
+	"pyproject.toml"
 ]

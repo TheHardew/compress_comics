@@ -18,7 +18,7 @@ import zipfile
 from argparse import ArgumentParser, Namespace
 from patoolib import extract_archive
 import traceback
-from text_bar import TextBar
+from .text_bar import TextBar
 
 
 def error_exit(msg, code):
@@ -175,8 +175,8 @@ def compress_comic(input_file, args):
         clean_tmp_dir(original_tmp)
         os.chdir(original_tmp)
         compressed_name = transcode(input_file, args, base)
+        os.chdir(base)
 
-    os.chdir(base)
     return compressed_name
 
 
@@ -278,7 +278,6 @@ def transcode(input_file, args, base):
             compressed_size = os.path.getsize(output_file)
             if args.overwrite == 'True':
                 move(output_file, base / input_file)
-            #create_comic_archive(output_file, zip_buffer)
             pbar.close(text=statistics_string(original_size, compressed_size, input_file.name))
         except Exception as e:
             output_file.unlink()
@@ -287,16 +286,6 @@ def transcode(input_file, args, base):
         return input_file
     else:
         return output_file
-
-
-def create_comic_archive(output_file, zip_buffer):
-    """
-    Pack a directory to a comic book
-    :param output_file: the file to compress the comic book to
-    :param processed_tmp: the directory of the files to compress
-    """
-    with open(output_file, 'wb') as f:
-        f.write(zip_buffer)
 
 
 def main():
