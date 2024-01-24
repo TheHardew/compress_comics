@@ -141,20 +141,21 @@ def get_output_filename(args, input_file, working_directory):
 def statistics_string(original_size, compressed_size, prefix):
     """
     Return a statistics string, e.g.:
-    A.cbz - 10 MiB / 15 MiB - 67%
+    A.cbz - 10/15 (-5) [MiB] 67%
     :param prefix: what string to include at the beginning
     """
 
     # to MiB
     difference = compressed_size - original_size
-    original_size //= 1024 * 1024 
-    compressed_size //= 1024 * 1024 
-    difference //= 1024 * 1024
+    quotient = round(compressed_size / original_size * 100)
+    original_size = round(original_size / 1024 * 1024) 
+    compressed_size = round(compressed_size / 1024 * 1024)
+    difference = round(difference / 1024 * 1024)
 
     return (prefix + ' - ' +
         f'{compressed_size}/{original_size}' +
         f' ({difference}) [MiB]' +
-        f' {round(compressed_size / original_size * 100)}%')
+        f' {quotient}%')
 
 
 def compress_comic(input_file, args):
