@@ -47,7 +47,10 @@ class TextBar(tqdm):
         text = ' ' + self.text
         custom_bar = text + ' ' * (bar_length - len(text))
 
-        filled_in = round(bar_length * self.n / max(1, self.total))
+        if self.total:
+            filled_in = round(bar_length * self.n / max(1, self.total))
+        else:
+            filled_in = bar_length
         return background_color + custom_bar[:filled_in] + reset_color + custom_bar[filled_in:]
 
 
@@ -58,10 +61,17 @@ class TextBar(tqdm):
         """
         # sets width for the number of current items to match the width of total items
         width = len(str(self.total))
-        r_bar = f'| {self.n: >{width}}/' + '{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]'
-        bar_format = '{l_bar}' + f'{r_bar}'
+        if self.total == 0:
+            l_bar = '100%|'
+            remaining = '00:00'
+        else:
+            l_bar = '{l_bar}'
+            remaining = '{remaining}'
 
-        return '{l_bar}' + self.__get_custom_progress_bar(bar_format) + r_bar
+        r_bar = f'| {self.n: >{width}}/' + '{total_fmt} [{elapsed}<' + f'{remaining}' + ', {rate_fmt}{postfix}]'
+        bar_format = l_bar + r_bar
+
+        return l_bar + self.__get_custom_progress_bar(bar_format) + r_bar
 
     def __init__(self, *, text='', **kwargs):
         """
