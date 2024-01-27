@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "compress_comics_TheHardew"
-version = "v0.4.3"
+version = "v0.4.4"
 authors = [
   { name="TheHardew" },
 ]

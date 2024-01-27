@@ -323,11 +323,19 @@ def transcode(input_file, args, base):
     return output_file
 
 
-def main():
+def compress_all_comics(args, directory):
     """
-    Find all cbz/cbr books in the current directory and process them.
+    Find all cbz/cbr books in the directory and process them.
     """
-    args = handle_flags()
+    try:
+        subprocess.call('cjxl', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as error:
+        if error.errno == errno.ENOENT:
+            print('cjxl not found. Install libjxl')
+            return
+        print(error)
+        raise
+
     comic_books = [comic for comic in glob_relative('*') if (
         comic.is_file() and comic.suffix.lower() in ['.cbr', '.cbz'] and
         args.output_directory not in comic.parents
@@ -336,24 +344,16 @@ def main():
     original_size = sum([os.path.getsize(f) for f in comic_books])
     compressed_size = 0
 
-    try:
-        subprocess.call('cjxl', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except OSError as error:
-        if error.errno == errno.ENOENT:
-            print('cjxl not found. Install libjxl')
-            return
-
-        print(error)
-        raise
-
-
     with TextBar(total=len(comic_books),
                  text='Comic books',
                  position=2,
                  unit='book',
                  colour='#ff004c') as pbar:
         for book in comic_books:
-            compressed_name = compress_comic(book, args)
+            try:
+                compressed_name = compress_comic(book, args)
+            except:
+                raise
             compressed_size += os.path.getsize(compressed_name if compressed_name else book)
             pbar.display('', 1) # clear position 1
             pbar.update()
@@ -362,8 +362,15 @@ def main():
         pbar.close(text=statistics_string(original_size, compressed_size, 'Comic books'))
 
 
-if __name__ == "__main__":
+def main():
+    """
+    Compress all cbz/cbr files in the current directory
+    """
+    args = handle_flags()
     try:
-        main()
+        compress_all_comics(args, Path.cwd())
     except KeyboardInterrupt:
         pass
+
+if __name__ == "__main__":
+    main()
