@@ -33,7 +33,7 @@ class TextBar(tqdm):
         return base_bar_length
 
 
-    def __get_custom_progress_bar(self, bar_format):
+    def __get_custom_progress_bar(self, bar_format, filled=False):
         """
         Retrun a custom progress bar format encoding text in the middle of the progress bar
         :param bar_format: the format to modify
@@ -50,11 +50,11 @@ class TextBar(tqdm):
         if self.total:
             filled_in = round(bar_length * self.n / max(1, self.total))
         else:
-            filled_in = bar_length
+            filled_in = bar_length if filled else 0
         return background_color + custom_bar[:filled_in] + reset_color + custom_bar[filled_in:]
 
 
-    def __custom_bar_format(self):
+    def __custom_bar_format(self, filled=False):
         """
         Retrun a custom bar format encoding text in the middle of the progress  bar
         :return: the custom bar format
@@ -68,10 +68,11 @@ class TextBar(tqdm):
             l_bar = '{l_bar}'
             remaining = '{remaining}'
 
-        r_bar = f'| {self.n: >{width}}/' + '{total_fmt} [{elapsed}<' + f'{remaining}' + ', {rate_fmt}{postfix}]'
+        r_bar = f'| {self.n: >{width}}/' '{total_fmt} [{elapsed}<' \
+                f'{remaining}' ', {rate_fmt}{postfix}]'
         bar_format = l_bar + r_bar
 
-        return l_bar + self.__get_custom_progress_bar(bar_format) + r_bar
+        return l_bar + self.__get_custom_progress_bar(bar_format, filled=filled) + r_bar
 
     def __init__(self, *, text='', **kwargs):
         """
@@ -92,14 +93,14 @@ class TextBar(tqdm):
         tqdm.refresh(self, **kwargs)
 
 
-    def close(self, text=None):
+    def close(self, text=None, filled=False):
         """
         Close the bar while keeping the custom text or applying new one
         :param text: new text to apply. if None, use the old one
         """
         if text:
             self.text = text
-        self.bar_format = self.__custom_bar_format()
+        self.bar_format = self.__custom_bar_format(filled)
         tqdm.close(self)
 
 
@@ -111,7 +112,7 @@ class TextBar(tqdm):
         """
         # clear the format so nothing is printed on update
         self.bar_format = ''
-        tqdm.update(self)
+        tqdm.update(self, n)
         if text:
             self.text = text
         self.bar_format = self.__custom_bar_format()

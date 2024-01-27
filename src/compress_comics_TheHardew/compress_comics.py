@@ -8,16 +8,16 @@ Repacks cbr into cbz.
 """
 
 import os
-from shutil import copy, move
+import signal
+import errno
+from shutil import move
 import subprocess
 from pathlib import Path
 from multiprocessing import Pool, cpu_count, Manager
 from tempfile import TemporaryDirectory, NamedTemporaryFile
-import sys
 import zipfile
 from argparse import ArgumentParser, Namespace
 from patoolib import extract_archive
-import traceback
 from .text_bar import TextBar
 
 
@@ -54,16 +54,15 @@ def check_transcoding(output_file):
     If there are files left that the program is not sure how to handle, stop processing the book.
     :param tmp_dir: the processed directory to check
     """
-    extensions = ['.gif', '.jpg', '.jpeg', '.png', '.jxl', '.xml', '.txt']
     transcoded_extensions = ['.jpg', '.jpeg', '.png', '.gif']
 
     with zipfile.ZipFile(output_file, 'r') as zipf:
-        for f in glob_relative('*'):
-            if f.is_file() and f.suffix.lower() in transcoded_extensions:
-                f = f.with_suffix('.jxl')
-            
-            if f.is_file() and f.as_posix() not in zipf.namelist():
-                raise Exception(f'Some files were not copied {extension_string}')
+        for file in glob_relative('*'):
+            if file.is_file() and file.suffix.lower() in transcoded_extensions:
+                file = file.with_suffix('.jxl')
+
+            if file.is_file() and file.as_posix() not in zipf.namelist():
+                raise RuntimeError(f'Some files were not copied {file}')
 
 
 def handle_flags():
@@ -114,20 +113,28 @@ def handle_flags():
 
 
 def get_output_filename(args, input_file, working_directory):
+    """
+    Create a name for the output zip
+    :param args: program arguments
+    :param input_file: the path to the cbz file to be transcoded
+    :param working_directory: the directory the program was run
+    :return: the name of the zip file to write to
+    """
     directory = working_directory
-    if args.overwrite == True:
+
+    if args.overwrite is True:
         directory /= input_file.parent
         tmp_zip = NamedTemporaryFile(dir=directory, prefix='.' + input_file.name, delete=False).name
         return working_directory / tmp_zip
-    else:
-        directory /= args.output_directory
-        os.makedirs(directory / input_file.parent, exist_ok=True)
-        name = directory / input_file
-        name = name.with_suffix('.cbz')
 
-        if name.exists():
-            raise Exception(f'File exists - {name}')
-        return name
+    directory /= args.output_directory
+    os.makedirs(directory / input_file.parent, exist_ok=True)
+    name = directory / input_file
+    name = name.with_suffix('.cbz')
+
+    if name.exists():
+        raise FileExistsError(f'File exists - {name}')
+    return name
 
 
 def statistics_string(original_size, compressed_size, prefix):
@@ -140,7 +147,7 @@ def statistics_string(original_size, compressed_size, prefix):
     # to MiB
     difference = compressed_size - original_size
     quotient = round(compressed_size / original_size / 100)
-    original_size = round(original_size / 1024 / 1024) 
+    original_size = round(original_size / 1024 / 1024)
     compressed_size = round(compressed_size / 1024 / 1024)
     difference = round(difference / 1024 / 1024)
 
@@ -170,13 +177,12 @@ def compress_comic(input_file, args):
             os.chdir(original_tmp)
             compressed_name = transcode(input_file, args, base)
             os.chdir(base)
-    except Exception as e:
-        print(e)
+    except:
         os.chdir(base)
         original_tmp = Path(original_tmp)
         if original_tmp.exists():
             original_tmp.unlink()
-        return
+        raise
 
     return compressed_name
 
@@ -208,11 +214,13 @@ def transcode_file(input_file, args, lock, zip_file):
     :param args: the compression arguments to pass to cjxl
     :return: the compressed size
     """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     output_file = input_file.with_suffix('.jxl')
 
     cjxl_output = '/dev/stdout' if Path('/dev/stdout').exists() else '-'
 
-    result = subprocess.run([
+
+    program_string = [
         'cjxl',
         '--brotli_effort',
         args.brotli_effort,
@@ -226,17 +234,30 @@ def transcode_file(input_file, args, lock, zip_file):
         args.num_threads,
         '-j',
         args.lossless_jpeg,
-        input_file,
-        cjxl_output
-    ],
+    ]
+
+    if args.modular != 'None':
+        program_string.append('-m')
+        program_string.append(args.modular)
+
+    program_string.append(input_file)
+    program_string.append(cjxl_output)
+
+    
+    cjxl_process = subprocess.run(
+        program_string,
         check=True,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
+
+    #if cjxl_process.returncode:
+    #    print(cjxl_process.stderr)
+    #    raise RuntimeError('File not transcoded')
 
     with lock:
         with zipfile.ZipFile(zip_file, 'a', compression=zipfile.ZIP_STORED) as zipf:
-            zipf.writestr(str(output_file), result.stdout)
+            zipf.writestr(str(output_file), cjxl_process.stdout)
 
 
 def transcode(input_file, args, base):
@@ -249,13 +270,20 @@ def transcode(input_file, args, base):
 
     extensions = ['.gif', '.jpg', '.jpeg', '.png']
     files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
+
     with (
             Pool(args.threads) as pool,
             TextBar(total=len(files), text=input_file.name, unit='img', colour='#ff004c') as pbar,
             Manager() as manager
             ):
-        output_file = get_output_filename(args, input_file, base)
-        args = stringify_arguments(args)
+
+        try:
+            output_file = get_output_filename(args, input_file, base)
+        except FileExistsError as e:
+            pbar.close()
+            print(e)
+            return ''
+
         def update_bar(*a):
             pbar.update()
 
@@ -265,8 +293,9 @@ def transcode(input_file, args, base):
 
         lock = manager.Lock()
 
+        args = stringify_arguments(args)
         try:
-            for i, file in enumerate(files):
+            for file in files:
                 #transcode_file(file, tmp_dir, args, lock, zip_buffer)
                 pool.apply_async(transcode_file,
                                  (file, args, lock, output_file),
@@ -276,21 +305,22 @@ def transcode(input_file, args, base):
             pool.close()
             pool.join()
             copy_files(output_file)
-            # shouldn't be necessary because the program checks the exit status
+
             check_transcoding(output_file)
             compressed_size = os.path.getsize(output_file)
             if args.overwrite == 'True':
                 move(output_file, base / input_file)
-            pbar.close(text=statistics_string(original_size, compressed_size, input_file.name))
-        except Exception as e:
-            print(e)
-            output_file.unlink()
-            return ''
+            pbar.close(text=statistics_string(original_size, compressed_size, input_file.name),
+                       filled=True)
+        except:
+            pool.terminate()
+            if Path(output_file).exists():
+                output_file.unlink()
+            raise
 
     if args.overwrite == 'True':
         return input_file
-    else:
-        return output_file
+    return output_file
 
 
 def main():
@@ -305,6 +335,17 @@ def main():
 
     original_size = sum([os.path.getsize(f) for f in comic_books])
     compressed_size = 0
+
+    try:
+        subprocess.call('cjxl', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as error:
+        if error.errno == errno.ENOENT:
+            print('cjxl not found. Install libjxl')
+            return
+
+        print(error)
+        raise
+
 
     with TextBar(total=len(comic_books),
                  text='Comic books',
@@ -324,7 +365,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception as e:
-    # Print the exception and the stack trace
-        print(f"An error occurred: {e}")
-        traceback.print_exc()
+    except KeyboardInterrupt:
+        pass
