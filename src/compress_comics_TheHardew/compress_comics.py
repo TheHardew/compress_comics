@@ -104,7 +104,7 @@ def handle_flags():
     cwd = Path.cwd()
 
     if not args.overwrite:
-        args.output_directory = Path(args.output_directory).resolve().relative_to(cwd)
+        args.output_directory = Path(args.output_directory).as_posix()
 
     if not args.num_threads:
         args.num_threads = cpu_count() // args.threads
@@ -146,7 +146,7 @@ def statistics_string(original_size, compressed_size, prefix):
 
     # to MiB
     difference = compressed_size - original_size
-    quotient = round(compressed_size / original_size / 100)
+    quotient = round(compressed_size / original_size * 100)
     original_size = round(original_size / 1024 / 1024)
     compressed_size = round(compressed_size / 1024 / 1024)
     difference = round(difference / 1024 / 1024)
