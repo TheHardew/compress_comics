@@ -13,12 +13,13 @@ import errno
 from shutil import move
 import subprocess
 from pathlib import Path
-from multiprocessing import Pool, cpu_count, Manager
+import multiprocessing as mp
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 import zipfile
 from argparse import ArgumentParser, Namespace
 from patoolib import extract_archive
 from .text_bar import TextBar
+from time import sleep
 
 
 def glob_relative(pattern):
@@ -85,7 +86,7 @@ def handle_flags():
     parser.add_argument('-m', '--modular', type=int, choices=range(0, 2),
                         help='Use modular mode (not provided = encoder chooses, 0 = enforce VarDCT'
                         ', 1 = enforce modular mode).')
-    parser.add_argument('-t', '--threads', type=int, default=cpu_count(),
+    parser.add_argument('-t', '--threads', type=int, default=mp.cpu_count(),
                         help='The number of images to compress at once. Defaults to cpu threads.')
     parser.add_argument('--num_threads', type=int,
                         help='Number of threads to use to compress one image.'
@@ -120,7 +121,7 @@ def handle_flags():
         args.output_directory = Path(args.output_directory).as_posix()
 
     if not args.num_threads:
-        args.num_threads = cpu_count() // args.threads
+        args.num_threads = mp.cpu_count() // args.threads
 
     return args
 
@@ -297,9 +298,9 @@ def transcode(input_file, args, base):
     files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
 
     with (
-            Pool(args.threads) as pool,
+            mp.Pool(args.threads) as pool,
             TextBar(total=len(files), text=input_file.name, unit='img', colour='#ff004c') as pbar,
-            Manager() as manager
+            mp.Manager() as manager
             ):
 
         try:
@@ -328,7 +329,12 @@ def transcode(input_file, args, base):
                                  error_callback=error_handler
                                  )
             pool.close()
+            # one of the processess is the sync manager
+            while len(mp.active_children()) > 1:
+                pbar.refresh()
+                sleep(0.5)
             pool.join()
+
             copy_files(output_file)
 
             check_transcoding(output_file)
