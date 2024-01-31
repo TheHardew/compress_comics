@@ -79,8 +79,6 @@ def handle_flags():
                              'Default 3.')
     parser.add_argument('--brotli_effort', type=int, default=11,
                         help='Brotli effort setting. Range: 0 .. 11. Default 11.')
-    parser.add_argument('-d', '--distance', type=int, default=0,
-                        help='Max. butteraugli distance, lower = higher quality.  Default 0.')
     parser.add_argument('-j', '--lossless_jpeg', type=int, default=1,
                         help='If the input is JPEG, losslessly transcode JPEG, rather than using'
                              'reencoded pixels. 0 - Rencode, 1 - lossless. Default 1.')
@@ -98,10 +96,19 @@ def handle_flags():
     group.add_argument('-o', '--overwrite', action='store_true',
                         help='Overwrite the original file. Defaults to False.')
 
+    quality = parser.add_mutually_exclusive_group()
+    quality.add_argument('-d', '--distance', type=int, default=0,
+                         help='Max. butteraugli distance, lower = higher quality.  Default 0.')
+    quality.add_argument('-q', '--quality', type=int,
+    help='Quality setting, higher value = higher quality. This is internally mapped to --distance.'
+    '100 = mathematically lossless. 90 = visually lossless.'
+    'Quality values roughly match libjpeg quality.'
+    'Recommended range: 68 .. 96. Allowed range: 0 .. 100. Mutually exclusive with --distance.')
+
+
     args = parser.parse_args()
 
-    # even if it's already relative, strips things like './' from the beginning
-    cwd = Path.cwd()
+    cwd = Path.cwd().as_posix()
 
     if not args.overwrite:
         args.output_directory = Path(args.output_directory).as_posix()
@@ -240,10 +247,16 @@ def transcode_file(input_file, args, lock, zip_file):
         program_string.append('-m')
         program_string.append(args.modular)
 
+    if args.distance != 'None':
+        program_string.append('-d')
+        program_string.append(args.distance)
+    else:
+        program_string.append('-q')
+        program_string.append(args.quality)
+
     program_string.append(input_file)
     program_string.append(cjxl_output)
 
-    
     cjxl_process = subprocess.run(
         program_string,
         check=True,
