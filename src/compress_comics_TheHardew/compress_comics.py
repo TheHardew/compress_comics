@@ -72,17 +72,17 @@ def handle_flags():
     """
     parser = ArgumentParser()
 
-    parser.add_argument('-e', '--effort', type=int, default=9,
-                        help='Encoder effort setting. Range: 1 .. 9. Default 9.')
+    parser.add_argument('-e', '--effort', type=int, default=9, choices=range(1, 10),
+                        help='Encoder effort setting. Default 9.')
     parser.add_argument('-E', '--modular_nb_prev_channels', type=int, default=3,
                         help='[modular encoding] number of extra MA tree properties to use.'
                              'Default 3.')
-    parser.add_argument('--brotli_effort', type=int, default=11,
-                        help='Brotli effort setting. Range: 0 .. 11. Default 11.')
-    parser.add_argument('-j', '--lossless_jpeg', type=int, default=1,
+    parser.add_argument('--brotli_effort', type=int, default=11, choices=range(1, 12),
+                        help='Brotli effort setting. Default 11.')
+    parser.add_argument('-j', '--lossless_jpeg', type=int, default=1, choices=range(0, 2),
                         help='If the input is JPEG, losslessly transcode JPEG, rather than using'
                              'reencoded pixels. 0 - Rencode, 1 - lossless. Default 1.')
-    parser.add_argument('-m', '--modular', type=int,
+    parser.add_argument('-m', '--modular', type=int, choices=range(0, 2),
                         help='Use modular mode (not provided = encoder chooses, 0 = enforce VarDCT'
                         ', 1 = enforce modular mode).')
     parser.add_argument('-t', '--threads', type=int, default=cpu_count(),
@@ -90,16 +90,19 @@ def handle_flags():
     parser.add_argument('--num_threads', type=int,
                         help='Number of threads to use to compress one image.'
                         'Defaults to (cpu threads) / --threads')
+    parser.add_argument('-O', '--overwrite-destination', action='store_true',
+                        help='Overwrite the destination, if it exists. Default False')
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('output_directory', type=str, help='Output directory', nargs='?')
     group.add_argument('-o', '--overwrite', action='store_true',
-                        help='Overwrite the original file. Defaults to False.')
+                        help='Overwrite the original file. Default False.'
+                       'Can only be passed if outputting to a folder')
 
     quality = parser.add_mutually_exclusive_group()
     quality.add_argument('-d', '--distance', type=int, default=0,
                          help='Max. butteraugli distance, lower = higher quality.  Default 0.')
-    quality.add_argument('-q', '--quality', type=int,
+    quality.add_argument('-q', '--quality', type=float,
     help='Quality setting, higher value = higher quality. This is internally mapped to --distance.'
     '100 = mathematically lossless. 90 = visually lossless.'
     'Quality values roughly match libjpeg quality.'
@@ -109,6 +112,9 @@ def handle_flags():
     args = parser.parse_args()
 
     cwd = Path.cwd().as_posix()
+
+    if args.overwrite_destination and not args.output_directory:
+        raise ValueError('Overwrite destination can only be used when outputting to a folder.')
 
     if not args.overwrite:
         args.output_directory = Path(args.output_directory).as_posix()
@@ -129,13 +135,19 @@ def get_output_filename(args, input_file, working_directory):
     """
     directory = working_directory
 
-    if args.overwrite is True:
+    if args.overwrite:
         directory /= input_file.parent
         tmp_zip = NamedTemporaryFile(dir=directory, prefix='.' + input_file.name, delete=False).name
         return working_directory / tmp_zip
 
     directory /= args.output_directory
     os.makedirs(directory / input_file.parent, exist_ok=True)
+
+    if args.overwrite_destination:
+        directory /= input_file.parent
+        tmp_zip = NamedTemporaryFile(dir=directory, prefix='.' + input_file.name, delete=False).name
+        return working_directory / tmp_zip
+
     name = directory / input_file
     name = name.with_suffix('.cbz')
 
@@ -323,6 +335,8 @@ def transcode(input_file, args, base):
             compressed_size = os.path.getsize(output_file)
             if args.overwrite == 'True':
                 move(output_file, base / input_file)
+            elif args.overwrite_destination == 'True':
+                move(output_file, base / Path(args.output_directory) / input_file.with_suffix('.cbz'))
             pbar.close(text=statistics_string(original_size, compressed_size, input_file.name),
                        filled=True)
         except:
@@ -333,6 +347,8 @@ def transcode(input_file, args, base):
 
     if args.overwrite == 'True':
         return input_file
+    if args.overwrite_destination == 'True':
+        return Path(args.output_directory) / input_file.with_suffix('.cbz')
     return output_file
 
 
@@ -351,7 +367,7 @@ def compress_all_comics(args, directory):
 
     comic_books = [comic for comic in glob_relative('*') if (
         comic.is_file() and comic.suffix.lower() in ['.cbr', '.cbz'] and
-        args.output_directory not in comic.parents
+        Path(args.output_directory) not in comic.parents
         )]
 
     original_size = sum([os.path.getsize(f) for f in comic_books])
