@@ -8,7 +8,6 @@ Repacks cbr into cbz.
 """
 
 import os
-import signal
 import errno
 from shutil import move
 import subprocess
@@ -234,56 +233,56 @@ def transcode_file(input_file, args, lock, zip_file):
     :param args: the compression arguments to pass to cjxl
     :return: the compressed size
     """
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    output_file = input_file.with_suffix('.jxl')
+    try:
+        output_file = input_file.with_suffix('.jxl')
 
-    cjxl_output = '/dev/stdout' if Path('/dev/stdout').exists() else '-'
+        cjxl_output = '/dev/stdout' if Path('/dev/stdout').exists() else '-'
 
 
-    program_string = [
-        'cjxl',
-        '--brotli_effort',
-        args.brotli_effort,
-        '-d',
-        args.distance,
-        '-e',
-        args.effort,
-        '-E',
-        args.modular_nb_prev_channels,
-        '--num_threads',
-        args.num_threads,
-        '-j',
-        args.lossless_jpeg,
-    ]
+        program_string = [
+            'cjxl',
+            '--brotli_effort',
+            args.brotli_effort,
+            '-e',
+            args.effort,
+            '-E',
+            args.modular_nb_prev_channels,
+            '--num_threads',
+            args.num_threads,
+            '-j',
+            args.lossless_jpeg,
+        ]
 
-    if args.modular != 'None':
-        program_string.append('-m')
-        program_string.append(args.modular)
+        if args.modular != 'None':
+            program_string.append('-m')
+            program_string.append(args.modular)
 
-    if args.distance != 'None':
-        program_string.append('-d')
-        program_string.append(args.distance)
-    else:
-        program_string.append('-q')
-        program_string.append(args.quality)
+        if args.distance != 'None':
+            program_string.append('-d')
+            program_string.append(args.distance)
+        else:
+            program_string.append('-q')
+            program_string.append(args.quality)
 
-    program_string.append(input_file)
-    program_string.append(cjxl_output)
+        program_string.append(input_file)
+        program_string.append(cjxl_output)
 
-    cjxl_process = subprocess.run(
-        program_string,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+        cjxl_process = subprocess.run(
+            program_string,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
 
-    #if cjxl_process.returncode:
-    #    print(cjxl_process.stderr)
-    #    raise RuntimeError('File not transcoded')
+        #if cjxl_process.returncode:
+        #    print(cjxl_process.stderr)
+        #    raise RuntimeError('File not transcoded')
 
-    with lock:
-        with zipfile.ZipFile(zip_file, 'a', compression=zipfile.ZIP_STORED) as zipf:
-            zipf.writestr(str(output_file), cjxl_process.stdout)
+        with lock:
+            with zipfile.ZipFile(zip_file, 'a', compression=zipfile.ZIP_STORED) as zipf:
+                zipf.writestr(str(output_file), cjxl_process.stdout)
+    except KeyboardInterrupt:
+        pass
 
 
 def transcode(input_file, args, base):
