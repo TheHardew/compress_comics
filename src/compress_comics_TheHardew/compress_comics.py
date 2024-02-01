@@ -370,10 +370,14 @@ def compress_all_comics(args, directory):
         print(error)
         raise
 
-    comic_books = [comic for comic in glob_relative('*') if (
-        comic.is_file() and comic.suffix.lower() in ['.cbr', '.cbz'] and
-        Path(args.output_directory) not in comic.parents
-        )]
+    files = [file for file in glob_relative('*') if file.is_file()]
+
+    comic_books = []
+    for file in files:
+        if (file.suffix.lower() in ['.cbr', '.cbz'] and
+            (args.overwrite or Path(args.output_directory) not in file.parents)
+            ):
+            comic_books.append(file)
 
     original_size = sum([os.path.getsize(f) for f in comic_books])
     compressed_size = 0
