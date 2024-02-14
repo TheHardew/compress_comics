@@ -100,7 +100,11 @@ class TextBar(tqdm):
         """
         if text:
             self.text = text
-        self.bar_format = self.__custom_bar_format(filled)
+
+        if filled:
+            self.bar_format = self.__custom_bar_format(filled)
+        else:
+            self.bar_format = '{elapsed}| ' + self.text
         tqdm.close(self)
 
 

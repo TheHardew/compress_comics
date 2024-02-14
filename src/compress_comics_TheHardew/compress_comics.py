@@ -340,8 +340,7 @@ def transcode(input_file, prog_args, enc_args, base):
                 move(output_file, base / input_file)
             elif prog_args.overwrite_destination == 'True':
                 move(output_file, base / Path(prog_args.output_directory) / input_file.with_suffix('.cbz'))
-            pbar.close(text=statistics_string(original_size, compressed_size, input_file.name),
-                       filled=True)
+            pbar.close(text=statistics_string(original_size, compressed_size, input_file.name))
         except:
             pool.terminate()
             if Path(output_file).exists():
@@ -395,7 +394,7 @@ def compress_all_comics(prog_args, enc_args, directory):
             pbar.update()
 
         pbar.display('', 2)
-        pbar.close(text=statistics_string(original_size, compressed_size, 'Comic books'))
+        pbar.close(text=statistics_string(original_size, compressed_size, 'Comic books'), filled=True)
 
 
 def main():
