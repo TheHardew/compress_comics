@@ -73,6 +73,8 @@ def parse_args(add_help=True):
         encoder_args = {k: v for k, v in vars(parser.parse_known_args()[0]).items() if k not in program_args}
 
         program_args = Namespace(**program_args)
+        if program_args.output_directory:
+            program_args.output_directory = Path(program_args.output_directory).resolve()
         encoder_args = Namespace(**encoder_args)
 
         if encoder_args.num_threads is None:
@@ -102,9 +104,6 @@ def handle_flags():
     if program_args.overwrite_destination and not program_args.output_directory:
         raise ValueError('Overwrite destination can only be used when outputting to a folder.')
 
-    if not program_args.overwrite:
-        program_args.output_directory = Path(program_args.output_directory).as_posix()
-
     return program_args, encoder_args
 
 
@@ -126,7 +125,7 @@ def compress_all_comics(prog_args, enc_args, directory):
     comic_books = []
     for file in files:
         if (file.suffix.lower() in ['.cbr', '.cbz'] and
-                (prog_args.overwrite or Path(prog_args.output_directory) not in file.parents)
+                (prog_args.overwrite or prog_args.output_directory not in file.parents)
         ):
             comic_books.append(file)
 

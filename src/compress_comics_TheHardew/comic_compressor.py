@@ -199,7 +199,7 @@ class ComicCompressor:
         if self.program_options.overwrite:
             return self.input_file
 
-        output_directory = self.program_options.output_directory
+        output_directory = self.program_options.output_directory.resolve()
         output_directory /= self.input_file.relative_to(self.working_directory).parent
 
         os.makedirs(output_directory, exist_ok=True)
