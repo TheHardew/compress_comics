@@ -19,7 +19,7 @@ class TextBar(tqdm):
         :param hex_color: a hex color string, e.g. #ABCDEF
         :return: the shell escape code
         """
-        return tuple(int(hex_color[i:i+2], 16) for i in (1, 3, 5))
+        return tuple(int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
 
     def __get_background_color_string(self):
         """
@@ -29,11 +29,9 @@ class TextBar(tqdm):
         colours = TextBar.__colors_from_rgb_hex(self.colour)
         return '\x1b[48;2;' + ';'.join(map(str, colours)) + 'm'
 
-
     @staticmethod
     def reset_line():
         print("\033[0m")
-
 
     def __get_foreground_color_string(self):
         """
@@ -42,7 +40,6 @@ class TextBar(tqdm):
         """
         colours = TextBar.__colors_from_rgb_hex(self.colour)
         return '\x1b[38;2;' + ';'.join(map(str, colours)) + 'm'
-
 
     def __get_base_bar_length(self, bar_format):
         """
@@ -54,10 +51,9 @@ class TextBar(tqdm):
         base_bar_length = len(str(self))
         return base_bar_length
 
-
     def __get_custom_progress_bar(self, bar_format, filled=False):
         """
-        Retrun a custom progress bar format encoding text in the middle of the progress bar
+        Return a custom progress bar format encoding text in the middle of the progress bar
         :param bar_format: the format to modify
         :return: the custom progress bar format
         """
@@ -75,30 +71,25 @@ class TextBar(tqdm):
             filled_in = bar_length if filled else 0
         return background_color + custom_bar[:filled_in] + reset_color + custom_bar[filled_in:]
 
-
     @staticmethod
     def __format_time(seconds):
         minutes, seconds = divmod(seconds, 60)
         hours, minutes = divmod(minutes, 60)
 
-        R = f'{int(minutes):02d}:{int(seconds):02d}'
+        return_string = f'{int(minutes):02d}:{int(seconds):02d}'
         if hours > 0:
-            return f'{int(hours):02d}' + R
-        return R
-    
-
+            return f'{int(hours):02d}' + return_string
+        return return_string
     def __calculate_remaining(self):
         avg_rate = self.__calculate_rate()
         if avg_rate == 0:
             return TextBar.__format_time(0)
         return TextBar.__format_time((self.total - self.n) / avg_rate)
 
-
     def __calculate_percentage(self):
         if self.total == 0:
             return 100
         return round(100 * self.n / self.total)
-
 
     def __format_elapsed(self):
         if self.n == 0:
@@ -107,14 +98,12 @@ class TextBar(tqdm):
         elapsed = time.time() - self.start_time
         return TextBar.__format_time(elapsed)
 
-
     def __calculate_rate(self):
         return self.n / (time.time() - self.start_time)
 
-
     def __custom_bar_format(self, filled=False):
         """
-        Retrun a custom bar format encoding text in the middle of the progress  bar
+        Return a custom bar format encoding text in the middle of the progress  bar
         :return: the custom bar format
         """
         # sets width for the number of current items to match the width of total items
@@ -138,7 +127,7 @@ class TextBar(tqdm):
 
     def __init__(self, *args, text='', **kwargs):
         """
-        Initiazlise the text progress bar
+        Initialize the text progress bar
         :param text: text to use
         """
         self.text = text
@@ -146,11 +135,10 @@ class TextBar(tqdm):
         self.running_times = [0]
         self.n = 0
         self.closed = False
-        #self.position = 0
+        # self.position = 0
         super().__init__(*args, **kwargs)
         self.bar_format = self.__custom_bar_format()
         self.refresh()
-
 
     def refresh(self, **kwargs):
         """
@@ -158,7 +146,6 @@ class TextBar(tqdm):
         """
         self.bar_format = self.__custom_bar_format()
         tqdm.refresh(self, **kwargs)
-
 
     def close(self, text=None, filled=False):
         """
@@ -182,7 +169,6 @@ class TextBar(tqdm):
             print(f'{self.__format_elapsed()}|', self.text)
 
         self.closed = True
-
 
     def update(self, n=1, text=None):
         """
