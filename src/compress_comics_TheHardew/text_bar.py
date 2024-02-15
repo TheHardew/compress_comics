@@ -100,7 +100,8 @@ class TextBar(tqdm):
         return TextBar.__format_time(elapsed)
 
     def __calculate_rate(self):
-        return self.n / (time.time() - self.start_time)
+        elapsed = time.time() - self.start_time
+        return self.n / elapsed if elapsed else 0
 
     def __custom_closed_bar_format(self, filled=False):
         """
