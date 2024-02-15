@@ -12,12 +12,15 @@ By default, compresses with:
 
 Compresses as many images in parallel as there are threads.  
 Because of that, it may run out of memory on bigger resolutions.  
+Adjust with:  
+```
+-t / --threads
+```
 
 Basic usage:  
-`python compress_comics.py output_directory`  
+`compress_comics output_directory`  
 
 To check all program options:  
-`python compress_comics.py -h`
+`compress_comics -h`
 
 Needs `cjxl` installed and in PATH.  
-Needs the patool library.
