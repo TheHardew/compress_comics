@@ -142,8 +142,11 @@ class ComicCompressor:
         Compress all the image files in the current directory
         :return: the name of the compressed file
         """
-        extensions = ['.gif', '.jpg', '.jpeg', '.png']
-        files = [f for f in glob_relative('*') if f.suffix.lower() in extensions and f.is_file()]
+        extensions = ['.png', '.gif', '.jpg', '.jpeg']
+        files = []
+        # modular encoding should be carried out first for better performance
+        for ext in extensions:
+            files += [f for f in glob_relative('*') if f.is_file() and f.suffix.lower() == ext]
 
         directory = self.output_file.parent
         with (

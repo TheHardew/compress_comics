@@ -5,6 +5,7 @@ from pathlib import Path
 import zipfile
 import os
 
+
 def get_zipfile_files(filepath):
     with zipfile.ZipFile(filepath, 'r') as zipf:
         return sorted(zipf.namelist())
