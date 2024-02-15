@@ -80,6 +80,7 @@ class TextBar(tqdm):
         if hours > 0:
             return f'{int(hours):02d}' + return_string
         return return_string
+
     def __calculate_remaining(self):
         avg_rate = self.__calculate_rate()
         if avg_rate == 0:
@@ -100,6 +101,27 @@ class TextBar(tqdm):
 
     def __calculate_rate(self):
         return self.n / (time.time() - self.start_time)
+
+    def __custom_closed_bar_format(self, filled=False):
+        """
+        Return a custom bar format encoding text in the middle of the progress  bar
+        :return: the custom bar format
+        """
+        # sets width for the number of current items to match the width of total items
+        width = len(str(self.total))
+
+        l_bar = self.__format_elapsed() + '|'
+        rate = self.__calculate_rate()
+        rate_unit = f'{self.unit}/s'
+        if rate < 1 and rate != 0:
+            rate = 1 / rate
+            rate_unit = f's/{self.unit}'
+        rate = f'{rate:.2f}'
+
+        r_bar = f'| {self.n: >{width}}/{self.total} [{rate}{rate_unit}]'
+        bar_format = l_bar + r_bar
+
+        return l_bar + self.__get_custom_progress_bar(bar_format, filled=filled) + r_bar
 
     def __custom_bar_format(self, filled=False):
         """
@@ -159,7 +181,7 @@ class TextBar(tqdm):
             self.text = text
 
         if filled:
-            self.bar_format = self.__custom_bar_format(filled)
+            self.bar_format = self.__custom_closed_bar_format(filled)
             tqdm.close(self)
         else:
             self.display('')
