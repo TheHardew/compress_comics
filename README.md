@@ -6,10 +6,7 @@ Repacks cbr into cbz.
 
 By default, compresses with:
 ```
---brotli_effort 11
--e / --effort 9
 -d / --distance 0 (lossless)
--E / --modular_nb_prev_channels 3 
 -j / --lossless_jpeg 1
 ```
 
