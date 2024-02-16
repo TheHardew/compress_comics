@@ -78,7 +78,7 @@ class TextBar(tqdm):
 
         return_string = f'{int(minutes):02d}:{int(seconds):02d}'
         if hours > 0:
-            return f'{int(hours):02d}' + return_string
+            return f'{int(hours):02d}:' + return_string
         return return_string
 
     def __calculate_remaining(self):
