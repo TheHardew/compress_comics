@@ -67,17 +67,18 @@ def parse_args():
     parser.add_argument('program options', '-t', '--threads', type=int, default=mp.cpu_count(),
                         help='The number of images to compress at once. Defaults to cpu threads.')
     parser.add_argument('program options', '-O', '--overwrite-destination', action='store_true',
-                        help='Overwrite the destination, if it exists. Default: False')
+                        help='Overwrite the destination, if it exists. Default: False.\n'
+                             'Can only be passed if outputting to a folder')
 
     parser.add_mutually_exclusive_group('program options', 'output type', required=True)
     parser.add_argument('output type', 'output_directory', type=str, help='Output directory', nargs='?')
     parser.add_argument('output type', '-o', '--overwrite', action='store_true',
-                        help='Overwrite the original file. Default: False. '
-                             'Can only be passed if outputting to a folder')
+                        help='Overwrite the original file. Default: False.')
 
     parser.add_argument_group('cjxl options', 'Options passed to the cjxl encoder')
-    parser.add_argument('cjxl options', '-e', '--effort', type=int, choices=range(1, 10),
-                        help='Encoder effort setting.')
+    parser.add_argument('cjxl options', '-e', '--effort', type=int, choices=range(1, 11),
+                        help='Encoder effort setting.\n'
+                        'Effort 10 requires --allow_expert_options')
     parser.add_argument('cjxl options', '-E', '--modular_nb_prev_channels', type=int,
                         help='[modular encoding] number of extra MA tree properties to use.')
     parser.add_argument('cjxl options', '--brotli_effort', type=int, choices=range(1, 12),
