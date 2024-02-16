@@ -8,14 +8,12 @@ Repacks cbr into cbz.
 """
 
 import os
-import sys
 import errno
 import subprocess
 from pathlib import Path
-import multiprocessing as mp
-from argparse import ArgumentParser, Namespace
 from .text_bar import TextBar
 from .comic_compressor import ComicCompressor, statistics_string
+from .argument_parser import handle_flags
 
 
 def glob_relative(pattern):
@@ -24,87 +22,6 @@ def glob_relative(pattern):
     """
     cwd = Path.cwd()
     return [f.relative_to(cwd) for f in Path.cwd().rglob(pattern)]
-
-
-def parse_args(add_help=True):
-    parser = ArgumentParser(add_help=add_help)
-
-    program_group = parser.add_argument_group('program options', 'Options influencing program behaviour')
-    program_group.add_argument('-t', '--threads', type=int, default=mp.cpu_count(),
-                               help='The number of images to compress at once. Defaults to cpu threads.')
-    program_group.add_argument('-O', '--overwrite-destination', action='store_true',
-                               help='Overwrite the destination, if it exists. Default: False')
-
-    output_group = program_group.add_mutually_exclusive_group(required=True)
-    output_group.add_argument('output_directory', type=str, help='Output directory', nargs='?')
-    output_group.add_argument('-o', '--overwrite', action='store_true',
-                              help='Overwrite the original file. Default: False. '
-                                   'Can only be passed if outputting to a folder')
-
-    if not add_help:
-        program_args = vars(parser.parse_known_args()[0])
-
-    encoder_group = parser.add_argument_group('cjxl options', 'Options passed to the cjxl encoder')
-    encoder_group.add_argument('-e', '--effort', type=int, choices=range(1, 10),
-                               help='Encoder effort setting.')
-    encoder_group.add_argument('-E', '--modular_nb_prev_channels', type=int,
-                               help='[modular encoding] number of extra MA tree properties to use.')
-    encoder_group.add_argument('--brotli_effort', type=int, choices=range(1, 12),
-                               help='Brotli effort setting.')
-    encoder_group.add_argument('-j', '--lossless_jpeg', type=int, default=1, choices=range(0, 2),
-                               help='If the input is JPEG, losslessly transcode JPEG, rather than using '
-                                    'reencoded pixels. 0 - Rencode, 1 - lossless. Default: 1.')
-    encoder_group.add_argument('-m', '--modular', type=int, choices=range(0, 2),
-                               help='Use modular mode (0 = enforce VarDCT, 1 = enforce modular mode).')
-    encoder_group.add_argument('--num_threads', type=int, default=None,
-                               help='Number of threads to use to compress one image. '
-                                    'Default: (cpu threads) / --threads')
-
-    quality_group = encoder_group.add_mutually_exclusive_group()
-    quality_group.add_argument('-d', '--distance', type=int, default=0,
-                               help='Max. butteraugli distance, lower = higher quality.  Default: 0.')
-    quality_group.add_argument('-q', '--quality', type=float,
-                               help='Quality setting, higher value = higher quality. This is internally mapped to --distance.'
-                                    '\n100 = mathematically lossless. 90 = visually lossless.'
-                                    '\nQuality values roughly match libjpeg quality.'
-                                    '\nRecommended range: 68 .. 96. Allowed range: 0 .. 100. Mutually exclusive with --distance.')
-
-    if not add_help:
-        encoder_args = {k: v for k, v in vars(parser.parse_known_args()[0]).items() if k not in program_args}
-
-        program_args = Namespace(**program_args)
-        if program_args.output_directory:
-            program_args.output_directory = Path(program_args.output_directory).resolve()
-        encoder_args = Namespace(**encoder_args)
-
-        if encoder_args.num_threads is None:
-            encoder_args.num_threads = mp.cpu_count() // program_args.threads
-
-        return program_args, encoder_args
-
-    parser.parse_args()
-
-
-def handle_flags():
-    """
-    Process command line arguments
-    :return: the dictionary of processed arguments
-    """
-
-    # an ugly trick to be able to split arguments into multiple groups and still
-    # have auto help generation
-    # if the help flag is detected, the program will abort from argparse
-    # if not, the flags will be parsed twice
-    argv_copy = sys.argv
-    parse_args(add_help=True)
-
-    sys.argv = argv_copy
-    program_args, encoder_args = parse_args(add_help=False)
-
-    if program_args.overwrite_destination and not program_args.output_directory:
-        raise ValueError('Overwrite destination can only be used when outputting to a folder.')
-
-    return program_args, encoder_args
 
 
 def compress_all_comics(prog_args, enc_args, directory):
