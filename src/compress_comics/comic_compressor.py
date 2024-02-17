@@ -41,7 +41,7 @@ def statistics_string(compressed_size, original_size, prefix):
             f' {quotient}%')
 
 
-def _transcode_file(input_file, encoder_options, lock, zip_file):
+def _transcode_file(input_file, encoder_options, lock, zip_file, cjxl_path):
     """
     Compress a single image file
     :param input_file: the file to compress
@@ -53,7 +53,7 @@ def _transcode_file(input_file, encoder_options, lock, zip_file):
         output_file = input_file.with_suffix('.jxl')
         cjxl_output = '/dev/stdout' if Path('/dev/stdout').exists() else '-'
 
-        program_string = ['cjxl']
+        program_string = [cjxl_path]
 
         for arg in vars(encoder_options):
             value = getattr(encoder_options, arg)
@@ -83,7 +83,7 @@ def _transcode_file(input_file, encoder_options, lock, zip_file):
 
 
 class ComicCompressor:
-    def __init__(self, input_file, working_directory, program_options, encoder_options):
+    def __init__(self, input_file, working_directory, program_options, encoder_options, cjxl_path):
         self.input_file = Path(input_file)
         self.program_options = program_options
         self.encoder_options = encoder_options
@@ -91,6 +91,7 @@ class ComicCompressor:
         self.compressed_size = os.path.getsize(self.input_file)
         self.working_directory = working_directory
         self.output_file = self.__get_output_filename()
+        self.cjxl_path = cjxl_path
 
     def __unpack(self, directory):
         """
@@ -171,7 +172,7 @@ class ComicCompressor:
                 for file in files:
                     # transcode_file(file, tmp_dir, args, lock, zip_buffer)
                     pool.apply_async(_transcode_file,
-                                     (file, self.encoder_options, lock, temporary_output),
+                                     (file, self.encoder_options, lock, temporary_output, self.cjxl_path),
                                      callback=update_bar,
                                      error_callback=error_handler
                                      )

@@ -16,18 +16,33 @@ from .comic_compressor import ComicCompressor, statistics_string
 from .argument_parser import handle_flags
 
 
+def find_cjxl():
+    local_candidates = Path('.').glob('./cjxl*')
+
+    try:
+        for binary in local_candidates:
+            subprocess.call(binary, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return binary.resolve()
+    except OSError:
+        pass
+
+    try:
+        subprocess.call('cjxl', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return Path('cjxl')
+    except OSError as error:
+        if error.errno == errno.ENOENT:
+            print('cjxl not found. Install libjxl and put in in PATH or in the current directory')
+            return
+        print(error)
+        raise
+
+
 def compress_all_comics(prog_args, enc_args, directory):
     """
     Find all cbz/cbr books in the directory and process them.
     """
-    try:
-        subprocess.call('cjxl', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except OSError as error:
-        if error.errno == errno.ENOENT:
-            print('cjxl not found. Install libjxl')
-            return
-        print(error)
-        raise
+
+    cjxl_path = find_cjxl()
 
     files = [file for file in directory.rglob('*') if file.is_file()]
 
@@ -36,7 +51,7 @@ def compress_all_comics(prog_args, enc_args, directory):
         if (file.suffix.lower() in ['.cbr', '.cbz'] and
                 # overwrite only if input == output
                 # we don't want to recompress files that were just output
-                # that might happen output folder is in input but they are not the same
+                # that might happen output folder is in input, but they are not the same
                 (prog_args.overwrite and prog_args.output_directory == Path('.').resolve()
                  or prog_args.output_directory not in file.parents)
         ):
@@ -51,7 +66,7 @@ def compress_all_comics(prog_args, enc_args, directory):
         compressed_size = 0
         for book in comic_books:
             original_size += os.path.getsize(book)
-            compressor = ComicCompressor(book, directory, prog_args, enc_args)
+            compressor = ComicCompressor(book, directory, prog_args, enc_args, cjxl_path)
             compressed_path = compressor.compress()
             compressed_size += os.path.getsize(compressed_path)
             pbar.display('', 1)  # clear position 1
