@@ -66,14 +66,14 @@ def parse_args():
                         help='The number of images to compress at once. Defaults to cpu threads.')
     parser.add_argument('program options', '-O', '--output_directory', type=Path, default='.',
                         help='Output directory. Defaults to current directory.'
-                        '\nNeeds the -o flag to overwrite source.')
+                             '\nNeeds the -o flag to overwrite source.')
     parser.add_argument('program options', '-o', '--overwrite', action='store_true',
                         help='Overwrite the original file. Default: False.')
 
     parser.add_argument_group('cjxl options', 'Options passed to the cjxl encoder')
     parser.add_argument('cjxl options', '-e', '--effort', type=int, choices=range(1, 11),
                         help='Encoder effort setting.\n'
-                        'Effort 10 requires --allow_expert_options')
+                             'Effort 10 requires --allow_expert_options')
     parser.add_argument('cjxl options', '-E', '--modular_nb_prev_channels', type=int,
                         help='[modular encoding] number of extra MA tree properties to use.')
     parser.add_argument('cjxl options', '--brotli_effort', type=int, choices=range(1, 12),

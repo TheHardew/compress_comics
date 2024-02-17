@@ -7,7 +7,6 @@ Output files preserve the folder structure.
 Repacks cbr into cbz.
 """
 
-import os
 import errno
 import subprocess
 from pathlib import Path
@@ -37,14 +36,8 @@ def find_cjxl():
         raise
 
 
-def compress_all_comics(prog_args, enc_args, directory):
-    """
-    Find all cbz/cbr books in the directory and process them.
-    """
-
-    cjxl_path = find_cjxl()
-
-    files = [file for file in directory.rglob('*') if file.is_file()]
+def find_input_files(program_args, working_directory):
+    files = [file for file in working_directory.rglob('*') if file.is_file()]
 
     comic_books = []
     for file in files:
@@ -52,10 +45,27 @@ def compress_all_comics(prog_args, enc_args, directory):
                 # overwrite only if input == output
                 # we don't want to recompress files that were just output
                 # that might happen output folder is in input, but they are not the same
-                (prog_args.overwrite and prog_args.output_directory == Path('.').resolve()
-                 or prog_args.output_directory not in file.parents)
+                (program_args.overwrite and program_args.output_directory == Path('.').resolve()
+                 or program_args.output_directory not in file.parents)
         ):
-            comic_books.append(file)
+            output_directory = program_args.output_directory
+            output_directory /= file.relative_to(working_directory).parent
+            output_file = output_directory / file.with_suffix('.cbz').name
+
+            if output_file.exists() and not program_args.overwrite:
+                raise FileExistsError(f'File exists - {output_file}')
+            comic_books.append((file, output_file))
+
+    return comic_books
+
+
+def compress_all_comics(prog_args, enc_args, directory):
+    """
+    Find all cbz/cbr books in the directory and process them.
+    """
+
+    cjxl_path = find_cjxl()
+    comic_books = find_input_files(prog_args, directory)
 
     with TextBar(total=len(comic_books),
                  text='Comic books',
@@ -64,11 +74,11 @@ def compress_all_comics(prog_args, enc_args, directory):
                  colour='#ff004c') as pbar:
         original_size = 0
         compressed_size = 0
-        for book in comic_books:
-            original_size += os.path.getsize(book)
-            compressor = ComicCompressor(book, directory, prog_args, enc_args, cjxl_path)
-            compressed_path = compressor.compress()
-            compressed_size += os.path.getsize(compressed_path)
+        for (book, output_book) in comic_books:
+            compressor = ComicCompressor(book, output_book, enc_args, cjxl_path, prog_args.threads)
+            original_size += compressor.original_size
+            compressor.compress()
+            compressed_size += compressor.compressed_size
             pbar.display('', 1)  # clear position 1
             stat_string = statistics_string(compressed_size, original_size, 'Comic books')
             pbar.update(text=stat_string)

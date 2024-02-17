@@ -83,15 +83,14 @@ def _transcode_file(input_file, encoder_options, lock, zip_file, cjxl_path):
 
 
 class ComicCompressor:
-    def __init__(self, input_file, working_directory, program_options, encoder_options, cjxl_path):
+    def __init__(self, input_file, output_file, encoder_options, cjxl_path, threads):
         self.input_file = Path(input_file)
-        self.program_options = program_options
         self.encoder_options = encoder_options
         self.original_size = os.path.getsize(self.input_file)
         self.compressed_size = os.path.getsize(self.input_file)
-        self.working_directory = working_directory
-        self.output_file = self.__get_output_filename()
+        self.output_file = output_file
         self.cjxl_path = cjxl_path
+        self.threads = threads
 
     def __unpack(self, directory):
         """
@@ -115,7 +114,7 @@ class ComicCompressor:
                 self.__unpack(unpacked_comic_dir)
                 ComicCompressor.__clean_tmp_dir(unpacked_comic_dir)
                 os.chdir(unpacked_comic_dir)
-                compressed_name = self.__transcode()
+                self.__transcode()
                 os.chdir(base)
         except:
             os.chdir(base)
@@ -123,8 +122,6 @@ class ComicCompressor:
             if unpacked_comic_dir.exists():
                 unpacked_comic_dir.unlink()
             raise
-
-        return compressed_name
 
     @staticmethod
     def __clean_tmp_dir(tmp_dir):
@@ -151,7 +148,7 @@ class ComicCompressor:
 
         directory = self.output_file.parent
         with (
-            mp.Pool(self.program_options.threads) as pool,
+            mp.Pool(self.threads) as pool,
             mp.Manager() as manager,
             TextBar(total=len(files), text=self.input_file.name, unit='img', colour='#ff004c') as pbar,
             TemporaryDirectory(dir=directory, prefix='.compressed_books') as tmp_dir,
@@ -187,31 +184,15 @@ class ComicCompressor:
 
                 self.__check_transcoding(temporary_output)
                 self.compressed_size = os.path.getsize(temporary_output)
+                os.makedirs(self.input_file.parent, exist_ok=True)
                 move(temporary_output, self.output_file)
                 pbar.close(text=statistics_string(self.compressed_size, self.original_size, self.input_file.name))
             except:
                 pool.terminate()
                 raise
 
-        return self.output_file
-
-    def __get_output_filename(self):
-        """
-        Create a name for the output zip
-        :return: the name of the zip file to write to
-        """
-        output_directory = self.program_options.output_directory
-        output_directory /= self.input_file.relative_to(self.working_directory).parent
-
-        os.makedirs(output_directory, exist_ok=True)
-
-        name = output_directory / self.input_file.with_suffix('.cbz').name
-
-        if name.exists() and not self.program_options.overwrite:
-            raise FileExistsError(f'File exists - {name}')
-        return name
-
-    def __check_transcoding(self, output_file):
+    @staticmethod
+    def __check_transcoding(output_file):
         """
         Make sure that all the files left in the comic book can be handled by the program.
         If there are files left that the program is not sure how to handle, stop processing the book.
