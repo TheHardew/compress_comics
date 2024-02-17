@@ -6,7 +6,7 @@ from shutil import move
 import subprocess
 from pathlib import Path
 import multiprocessing as mp
-from tempfile import TemporaryDirectory, NamedTemporaryFile
+from tempfile import TemporaryDirectory
 import zipfile
 from patoolib import extract_archive
 from .text_bar import TextBar
