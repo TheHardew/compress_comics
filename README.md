@@ -18,7 +18,7 @@ Adjust with:
 ```
 
 Basic usage:  
-`compress_comics output_directory`  
+`compress_comics -O output_directory`  
 
 To check all program options:  
 `compress_comics -h`

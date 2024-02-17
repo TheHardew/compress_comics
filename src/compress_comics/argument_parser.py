@@ -6,8 +6,6 @@ from collections import defaultdict
 
 class ArgumentGroupParser:
     def __init__(self):
-        self.external_args = {}
-        self.internal_args = {}
         self.parser = ArgumentParser()
         self.groups = {}
         self.parents = {}
@@ -66,13 +64,10 @@ def parse_args():
     parser.add_argument_group('program options', 'Options influencing program behaviour')
     parser.add_argument('program options', '-t', '--threads', type=int, default=mp.cpu_count(),
                         help='The number of images to compress at once. Defaults to cpu threads.')
-    parser.add_argument('program options', '-O', '--overwrite-destination', action='store_true',
-                        help='Overwrite the destination, if it exists. Default: False.\n'
-                             'Can only be passed if outputting to a folder')
-
-    parser.add_mutually_exclusive_group('program options', 'output type', required=True)
-    parser.add_argument('output type', 'output_directory', type=str, help='Output directory', nargs='?')
-    parser.add_argument('output type', '-o', '--overwrite', action='store_true',
+    parser.add_argument('program options', '-O', '--output_directory', type=Path, default='.',
+                        help='Output directory. Defaults to current directory.'
+                        '\nNeeds the -o flag to overwrite source.')
+    parser.add_argument('program options', '-o', '--overwrite', action='store_true',
                         help='Overwrite the original file. Default: False.')
 
     parser.add_argument_group('cjxl options', 'Options passed to the cjxl encoder')
@@ -106,8 +101,10 @@ def parse_args():
     argument_groups = parser.parse_args()
     program_args = argument_groups['program options']
     encoder_args = argument_groups['cjxl options']
-    if program_args.output_directory:
-        program_args.output_directory = Path(program_args.output_directory).resolve()
+    program_args.output_directory = program_args.output_directory.resolve()
+
+    if program_args.output_directory == Path('.').resolve() and not program_args.overwrite:
+        raise ValueError('The -o flag is needed to overwrite source files')
 
     if encoder_args.num_threads is None:
         encoder_args.num_threads = mp.cpu_count() // program_args.threads
@@ -122,8 +119,4 @@ def handle_flags():
     """
 
     program_args, encoder_args = parse_args()
-
-    if program_args.overwrite_destination and not program_args.output_directory:
-        raise ValueError('Overwrite destination can only be used when outputting to a folder.')
-
     return program_args, encoder_args

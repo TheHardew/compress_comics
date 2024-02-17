@@ -199,17 +199,14 @@ class ComicCompressor:
         Create a name for the output zip
         :return: the name of the zip file to write to
         """
-        if self.program_options.overwrite:
-            return self.input_file
-
-        output_directory = self.program_options.output_directory.resolve()
+        output_directory = self.program_options.output_directory
         output_directory /= self.input_file.relative_to(self.working_directory).parent
 
         os.makedirs(output_directory, exist_ok=True)
 
         name = output_directory / self.input_file.with_suffix('.cbz').name
 
-        if name.exists() and not self.program_options.overwrite_destination:
+        if name.exists() and not self.program_options.overwrite:
             raise FileExistsError(f'File exists - {name}')
         return name
 

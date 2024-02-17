@@ -16,7 +16,7 @@ def test():
         expected_files = sorted([line.strip() for line in file])
 
     with TemporaryDirectory() as tmpd:
-        sys.argv = ['compress_comics', '-e1', '--brotli_effort', '1', tmpd]
+        sys.argv = ['compress_comics', '-e1', '--brotli_effort', '1', '-O', tmpd]
         compress_comics.main()
 
         for file in Path.cwd().rglob('*'):

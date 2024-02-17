@@ -16,14 +16,6 @@ from .comic_compressor import ComicCompressor, statistics_string
 from .argument_parser import handle_flags
 
 
-def glob_relative(pattern):
-    """
-    Recursively get a relative list of files in the current directory matching a glob pattern
-    """
-    cwd = Path.cwd()
-    return [f.relative_to(cwd) for f in Path.cwd().rglob(pattern)]
-
-
 def compress_all_comics(prog_args, enc_args, directory):
     """
     Find all cbz/cbr books in the directory and process them.
@@ -42,7 +34,11 @@ def compress_all_comics(prog_args, enc_args, directory):
     comic_books = []
     for file in files:
         if (file.suffix.lower() in ['.cbr', '.cbz'] and
-                (prog_args.overwrite or prog_args.output_directory not in file.parents)
+                # overwrite only if input == output
+                # we don't want to recompress files that were just output
+                # that might happen output folder is in input but they are not the same
+                (prog_args.overwrite and prog_args.output_directory == Path('.').resolve()
+                 or prog_args.output_directory not in file.parents)
         ):
             comic_books.append(file)
 
