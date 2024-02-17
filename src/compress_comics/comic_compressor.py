@@ -9,8 +9,8 @@ import multiprocessing as mp
 from tempfile import TemporaryDirectory
 import zipfile
 from patoolib import extract_archive
-from .text_bar import TextBar
 from time import sleep
+from .text_bar import TextBar
 
 
 def glob_relative(pattern):
