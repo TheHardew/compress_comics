@@ -147,6 +147,11 @@ class ComicCompressor:
             files += [f for f in glob_relative('*') if f.is_file() and f.suffix.lower() == ext]
 
         directory = self.output_file.parent
+        directory_created = False
+        if not directory.is_dir():
+            os.makedirs(directory, exist_ok=True)
+            directory_created = True
+
         with (
             mp.Pool(self.threads) as pool,
             mp.Manager() as manager,
@@ -184,10 +189,11 @@ class ComicCompressor:
 
                 self.__check_transcoding(temporary_output)
                 self.compressed_size = os.path.getsize(temporary_output)
-                os.makedirs(self.input_file.parent, exist_ok=True)
                 move(temporary_output, self.output_file)
                 pbar.close(text=statistics_string(self.compressed_size, self.original_size, self.input_file.name))
             except:
+                if directory_created:
+                    directory.unlink()
                 pool.terminate()
                 raise
 

@@ -36,25 +36,44 @@ def find_cjxl():
         raise
 
 
+def get_output_name(input_file, working_directory, program_args):
+    output_directory = program_args.output_directory
+    output_directory /= input_file.relative_to(working_directory).parent
+    output_file = output_directory / input_file.with_suffix('.cbz').name
+
+    if output_file.exists() and not program_args.overwrite:
+        raise FileExistsError(f'File exists - {output_file}')
+
+    return output_file
+
+
 def find_input_files(program_args, working_directory):
-    files = [file for file in working_directory.rglob('*') if file.is_file()]
-
     comic_books = []
-    for file in files:
-        if (file.suffix.lower() in ['.cbr', '.cbz'] and
-                # overwrite only if input == output
-                # we don't want to recompress files that were just output
-                # that might happen output folder is in input, but they are not the same
-                (program_args.overwrite and program_args.output_directory == Path('.').resolve()
-                 or program_args.output_directory not in file.parents)
-        ):
-            output_directory = program_args.output_directory
-            output_directory /= file.relative_to(working_directory).parent
-            output_file = output_directory / file.with_suffix('.cbz').name
+    outputs = set()
 
-            if output_file.exists() and not program_args.overwrite:
-                raise FileExistsError(f'File exists - {output_file}')
-            comic_books.append((file, output_file))
+    for input_path in program_args.INPUT:
+        comic_book = Path()
+        output_file = Path()
+
+        if input_path.is_file():
+            output_file = get_output_name(input_path, working_directory, program_args)
+            outputs.add(output_file)
+            comic_books.append((input_path, output_file))
+        else:
+            files = input_path.rglob('*.*')
+            files = sorted(files, key=lambda x: len(x.parents))
+            for file in files:
+                if (file.is_file() and file.suffix.lower() in ['.cbr', '.cbz'] and
+                        file not in outputs and
+                        (program_args.overwrite or program_args.output_directory not in file.parents)):
+                    output_file = get_output_name(file, working_directory, program_args)
+
+                    if output_file.exists() and not program_args.overwrite:
+                        raise FileExistsError(f'File exists - {output_file}')
+
+                    outputs.add(output_file)
+                    comic_books.append((file, output_file))
+
 
     return comic_books
 
@@ -78,6 +97,9 @@ def compress_all_comics(prog_args, enc_args, directory):
             compressor = ComicCompressor(book, output_book, enc_args, cjxl_path, prog_args.threads)
             original_size += compressor.original_size
             compressor.compress()
+            if (prog_args.overwrite and book.suffix.lower() != '.cbz' and book.is_file() and
+                    book.parent == output_book.parent):
+                book.unlink()
             compressed_size += compressor.compressed_size
             pbar.display('', 1)  # clear position 1
             stat_string = statistics_string(compressed_size, original_size, 'Comic books')

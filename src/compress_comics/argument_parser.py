@@ -1,12 +1,19 @@
 from pathlib import Path
 import multiprocessing as mp
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, Namespace, REMAINDER, HelpFormatter
 from collections import defaultdict
+
+
+class CustomHelpFormatter(HelpFormatter):
+    def format_help(self):
+        help_str = super().format_help()
+        help_str = help_str.replace('...', 'INPUT')
+        return help_str
 
 
 class ArgumentGroupParser:
     def __init__(self):
-        self.parser = ArgumentParser()
+        self.parser = ArgumentParser(formatter_class=CustomHelpFormatter)
         self.groups = {}
         self.parents = {}
         self.parent_groups = []
@@ -69,6 +76,9 @@ def parse_args():
                              '\nNeeds the -o flag to overwrite source.')
     parser.add_argument('program options', '-o', '--overwrite', action='store_true',
                         help='Overwrite the original file. Default: False.')
+    parser.add_argument('program options', 'INPUT', type=Path, nargs=REMAINDER,
+                        default='.',
+                        help='Input file/directory. Defaults to the current directory (.)')
 
     parser.add_argument_group('cjxl options', 'Options passed to the cjxl encoder')
     parser.add_argument('cjxl options', '-e', '--effort', type=int, choices=range(1, 11),
@@ -102,6 +112,10 @@ def parse_args():
     program_args = argument_groups['program options']
     encoder_args = argument_groups['cjxl options']
     program_args.output_directory = program_args.output_directory.resolve()
+
+    if not program_args.INPUT:
+        program_args.INPUT.append(Path('.'))
+    program_args.INPUT = map(lambda p: p.resolve(), program_args.INPUT)
 
     if program_args.output_directory == Path('.').resolve() and not program_args.overwrite:
         raise ValueError('The -o flag is needed to overwrite source files')
